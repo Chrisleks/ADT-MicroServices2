@@ -1,4 +1,7 @@
+
 import React, { useState, useEffect } from 'react';
+import { ref, onValue, set, update, remove, push } from 'firebase/database';
+import { db } from './services/firebase';
 import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
 import AiTutor from './components/AiTutor';
@@ -27,7 +30,7 @@ import {
   TransactionCategory, ApprovalStatus, ChatMessage
 } from './types';
 
-// Mock Initial Data for Authentication
+// Mock Initial Data for Authentication Seeding
 const INITIAL_USERS: SystemUser[] = [
   { username: 'admin', role: UserRole.MASTER_ADMIN, isActive: true, password: 'password' },
   { username: 'manager', role: UserRole.HOB, isActive: true, password: 'password' },
@@ -40,6 +43,7 @@ const App: React.FC = () => {
   const [loginPass, setLoginPass] = useState('');
   const [loginError, setLoginError] = useState('');
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [dbConnected, setDbConnected] = useState(true);
   
   // Data State
   const [loans, setLoans] = useState<Loan[]>([]);
@@ -49,49 +53,75 @@ const App: React.FC = () => {
   const [requests] = useState<ResetRequest[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   
-  // --- LOCAL STORAGE ENGINE (FRONTEND ONLY) ---
+  // --- FIREBASE REALTIME SYNC ---
   
-  // 1. Load Data on Mount
   useEffect(() => {
-    // Attempt to load from local storage
-    const storedLoans = localStorage.getItem('adt_loans');
-    const storedUsers = localStorage.getItem('adt_users');
-    const storedLogs = localStorage.getItem('adt_logs');
-    const storedMessages = localStorage.getItem('adt_messages');
+    // 1. Loans Listener
+    const loansRef = ref(db, 'loans');
+    const unsubLoans = onValue(loansRef, (snapshot) => {
+        const data = snapshot.val();
+        if (data) {
+            // Convert Object {id: Loan} to Array [Loan]
+            const loanArray = Object.values(data) as Loan[];
+            setLoans(loanArray);
+        } else {
+            setLoans([]);
+            // Seed if empty and this is first load (handled by explicit seed check usually, but simple here)
+        }
+    }, (error) => {
+        console.error("Firebase Read Error", error);
+        setDbConnected(false);
+    });
 
-    if (storedLoans) {
-        setLoans(JSON.parse(storedLoans));
-    } else {
-        // If no local data, use the Constants mock data
-        setLoans(INITIAL_LOANS);
-    }
+    // 2. Users Listener
+    const usersRef = ref(db, 'system_users');
+    const unsubUsers = onValue(usersRef, (snapshot) => {
+        const data = snapshot.val();
+        if (data) {
+            // Check if stored as array or object map
+            if (Array.isArray(data)) {
+                 setUsers(data);
+            } else {
+                 setUsers(Object.values(data));
+            }
+        } else {
+            // Seed Initial Users if DB is empty
+            const seedRef = ref(db, 'system_users');
+            // We use username as key to prevent duplicates easily
+            const userMap = INITIAL_USERS.reduce((acc, user) => ({...acc, [user.username]: user}), {});
+            set(seedRef, userMap);
+            setUsers(INITIAL_USERS);
+            
+            // Also seed loans if users are empty (implies fresh DB)
+            const loansSeedRef = ref(db, 'loans');
+            const loansMap = INITIAL_LOANS.reduce((acc, loan) => ({...acc, [loan.id]: loan}), {});
+            set(loansSeedRef, loansMap);
+        }
+    });
 
-    if (storedUsers) {
-        setUsers(JSON.parse(storedUsers));
-    } else {
-        setUsers(INITIAL_USERS);
-    }
+    // 3. Audit Logs Listener
+    const logsRef = ref(db, 'audit_logs');
+    const unsubLogs = onValue(logsRef, (snapshot) => {
+        const data = snapshot.val();
+        if (data) setAuditLogs(Object.values(data).reverse() as AuditLog[]); // Show newest first
+        else setAuditLogs([]);
+    });
 
-    if (storedLogs) setAuditLogs(JSON.parse(storedLogs));
-    if (storedMessages) setMessages(JSON.parse(storedMessages));
+    // 4. Chat Messages Listener
+    const chatRef = ref(db, 'chat_messages');
+    const unsubChat = onValue(chatRef, (snapshot) => {
+        const data = snapshot.val();
+        if (data) setMessages(Object.values(data));
+        else setMessages([]);
+    });
+
+    return () => {
+        unsubLoans();
+        unsubUsers();
+        unsubLogs();
+        unsubChat();
+    };
   }, []);
-
-  // 2. Save Data on Change
-  useEffect(() => {
-    if (loans.length > 0) localStorage.setItem('adt_loans', JSON.stringify(loans));
-  }, [loans]);
-
-  useEffect(() => {
-    if (users.length > 0) localStorage.setItem('adt_users', JSON.stringify(users));
-  }, [users]);
-
-  useEffect(() => {
-    if (auditLogs.length > 0) localStorage.setItem('adt_logs', JSON.stringify(auditLogs));
-  }, [auditLogs]);
-
-  useEffect(() => {
-    if (messages.length > 0) localStorage.setItem('adt_messages', JSON.stringify(messages));
-  }, [messages]);
 
 
   // Handlers
@@ -130,23 +160,26 @@ const App: React.FC = () => {
       details,
       severity
     };
-    setAuditLogs(prev => [newLog, ...prev]);
+    // Push to Firebase
+    push(ref(db, 'audit_logs'), newLog);
   };
 
-  // Data Update Handlers
+  // Data Update Handlers - Now writing to Firebase
   const handleAddLoan = (loan: Loan) => {
-    setLoans(prev => [...prev, loan]);
-    addAuditLog('Create Loan', `Registered new loan for ${loan.borrowerName} (ID: ${loan.id})`, 'INFO');
+    // Use set with specific ID path to ensure idempotency
+    set(ref(db, `loans/${loan.id}`), loan)
+      .then(() => addAuditLog('Create Loan', `Registered new loan for ${loan.borrowerName} (ID: ${loan.id})`, 'INFO'))
+      .catch(err => console.error(err));
   };
 
   const handleUpdateLoan = (updatedLoan: Loan) => {
-    setLoans(prev => prev.map(l => l.id === updatedLoan.id ? updatedLoan : l));
-    addAuditLog('Update Loan', `Updated profile for ${updatedLoan.borrowerName}`, 'INFO');
+    update(ref(db, `loans/${updatedLoan.id}`), updatedLoan)
+      .then(() => addAuditLog('Update Loan', `Updated profile for ${updatedLoan.borrowerName}`, 'INFO'));
   };
 
   const handleDeleteLoan = (id: string) => {
-    setLoans(prev => prev.filter(l => l.id !== id));
-    addAuditLog('Delete Loan', `Deleted loan record ID: ${id}`, 'CRITICAL');
+    remove(ref(db, `loans/${id}`))
+      .then(() => addAuditLog('Delete Loan', `Deleted loan record ID: ${id}`, 'CRITICAL'));
   };
 
   const handleTransaction = (loanId: string, category: TransactionCategory, direction: 'In' | 'Out', amount: number, notes: string) => {
@@ -166,8 +199,7 @@ const App: React.FC = () => {
         };
         
         const updatedLoan = { ...loan, pendingRequests: [...(loan.pendingRequests || []), request] };
-        setLoans(prev => prev.map(l => l.id === loanId ? updatedLoan : l));
-        
+        update(ref(db, `loans/${loanId}`), updatedLoan);
         addAuditLog('Request Withdrawal', `Requested ${category} withdrawal of ${amount} for ${loan.borrowerName}`, 'WARNING');
         return;
     }
@@ -193,8 +225,8 @@ const App: React.FC = () => {
       savingsBalance: updatedSavings,
       adasheBalance: updatedAdashe
     };
-    setLoans(prev => prev.map(l => l.id === loanId ? updatedLoan : l));
     
+    update(ref(db, `loans/${loanId}`), updatedLoan);
     addAuditLog('Post Transaction', `Posted ${direction} ${category} of ${amount} for ${loan.borrowerName}`, 'INFO');
   };
 
@@ -222,8 +254,8 @@ const App: React.FC = () => {
           savingsBalance: updatedSavings,
           adasheBalance: updatedAdashe
       };
-      setLoans(prev => prev.map(l => l.id === loanId ? updatedLoan : l));
       
+      update(ref(db, `loans/${loanId}`), updatedLoan);
       addAuditLog('Delete Transaction', `Reversed ${txn.category} transaction ${txnId} for ${loan.borrowerName}`, 'WARNING');
   };
 
@@ -238,14 +270,19 @@ const App: React.FC = () => {
         ? { disbursementStatus: nextStatus, status: 'Current' }
         : { disbursementStatus: nextStatus };
 
-      setLoans(prev => prev.map(l => l.id === loanId ? { ...l, ...finalUpdates } as Loan : l));
-      
-      addAuditLog('Approve Loan', `Advanced loan ${loanId} to ${nextStatus}`, 'INFO');
+      const loan = loans.find(l => l.id === loanId);
+      if(loan) {
+          update(ref(db, `loans/${loanId}`), { ...loan, ...finalUpdates });
+          addAuditLog('Approve Loan', `Advanced loan ${loanId} to ${nextStatus}`, 'INFO');
+      }
   };
 
   const handleRejectLoan = (loanId: string) => {
-      setLoans(prev => prev.map(l => l.id === loanId ? { ...l, disbursementStatus: ApprovalStatus.REJECTED } : l));
-      addAuditLog('Reject Loan', `Rejected loan application ${loanId}`, 'WARNING');
+      const loan = loans.find(l => l.id === loanId);
+      if(loan) {
+          update(ref(db, `loans/${loanId}`), { ...loan, disbursementStatus: ApprovalStatus.REJECTED });
+          addAuditLog('Reject Loan', `Rejected loan application ${loanId}`, 'WARNING');
+      }
   };
 
   const handleApproveTransaction = (loanId: string, reqId: string, currentStatus: ApprovalStatus) => {
@@ -284,8 +321,8 @@ const App: React.FC = () => {
                 adasheBalance: updatedAdashe,
                 pendingRequests: remainingRequests
               };
-              setLoans(prev => prev.map(l => l.id === loanId ? updatedLoan : l));
               
+              update(ref(db, `loans/${loanId}`), updatedLoan);
               addAuditLog('Approve Withdrawal', `Final approval for ${req.category} withdrawal of ${req.amount}`, 'INFO');
               return;
           }
@@ -293,8 +330,7 @@ const App: React.FC = () => {
 
       // Just update status if not final approval
       const updatedRequests = (loan.pendingRequests || []).map(r => r.id === reqId ? { ...r, status: nextStatus } : r);
-      setLoans(prev => prev.map(l => l.id === loanId ? { ...l, pendingRequests: updatedRequests } : l));
-      
+      update(ref(db, `loans/${loanId}`), { ...loan, pendingRequests: updatedRequests });
       addAuditLog('Approve Step', `Advanced transaction request ${reqId} to ${nextStatus}`, 'INFO');
   };
 
@@ -303,25 +339,27 @@ const App: React.FC = () => {
       if (!loan) return;
       
       const updatedRequests = (loan.pendingRequests || []).map(r => r.id === reqId ? { ...r, status: ApprovalStatus.REJECTED } : r);
-      setLoans(prev => prev.map(l => l.id === loanId ? { ...l, pendingRequests: updatedRequests } : l));
-      
+      update(ref(db, `loans/${loanId}`), { ...loan, pendingRequests: updatedRequests });
       addAuditLog('Reject Withdrawal', `Rejected transaction request ${reqId}`, 'WARNING');
   };
 
   // User Management
   const handleAddUser = (user: SystemUser) => {
-      setUsers(prev => [...prev, user]);
+      set(ref(db, `system_users/${user.username}`), user);
       addAuditLog('Create User', `Created user ${user.username}`, 'CRITICAL');
   };
 
   const handleDeleteUser = (username: string) => {
-      setUsers(prev => prev.filter(u => u.username !== username));
+      remove(ref(db, `system_users/${username}`));
       addAuditLog('Delete User', `Deleted user ${username}`, 'CRITICAL');
   };
 
   const handleUpdateUserRole = (username: string, role: UserRole) => {
-      setUsers(prev => prev.map(u => u.username === username ? { ...u, role } : u));
-      addAuditLog('Update Role', `Changed role for ${username} to ${role}`, 'CRITICAL');
+      const user = users.find(u => u.username === username);
+      if(user) {
+          update(ref(db, `system_users/${username}`), { role });
+          addAuditLog('Update Role', `Changed role for ${username} to ${role}`, 'CRITICAL');
+      }
   };
 
   // Chat
@@ -334,7 +372,7 @@ const App: React.FC = () => {
           timestamp: new Date().toISOString(),
           channel
       };
-      setMessages(prev => [...prev, msg]);
+      push(ref(db, 'chat_messages'), msg);
   };
 
   if (!currentUser) {
@@ -361,6 +399,9 @@ const App: React.FC = () => {
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.25em] mt-2">
                   AWAKE MICROCREDIT SERVICES
                 </p>
+                <div className={`mt-2 text-[9px] font-bold uppercase tracking-widest ${dbConnected ? 'text-emerald-500' : 'text-rose-500'}`}>
+                    {dbConnected ? '● Online Database' : '● Database Offline'}
+                </div>
               </div>
               
               {/* Login Form */}
@@ -407,9 +448,10 @@ const App: React.FC = () => {
 
                 <button 
                   type="submit" 
-                  className="w-full py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-black uppercase text-xs tracking-[0.15em] shadow-lg shadow-blue-600/30 hover:shadow-blue-600/50 hover:scale-[1.02] active:scale-[0.98] transition-all relative overflow-hidden group"
+                  disabled={!dbConnected}
+                  className="w-full py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-black uppercase text-xs tracking-[0.15em] shadow-lg shadow-blue-600/30 hover:shadow-blue-600/50 hover:scale-[1.02] active:scale-[0.98] transition-all relative overflow-hidden group disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <span className="relative z-10">Authenticate</span>
+                  <span className="relative z-10">{dbConnected ? 'Authenticate' : 'Connecting...'}</span>
                   <div className="absolute inset-0 bg-gradient-to-r from-indigo-600 to-blue-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                 </button>
                 
@@ -452,7 +494,7 @@ const App: React.FC = () => {
            loans={loans} 
            onTransaction={handleTransaction} 
            currentUser={currentUser}
-           isOnline={true}
+           isOnline={dbConnected}
            onManualSync={() => {}}
          />
        )}
