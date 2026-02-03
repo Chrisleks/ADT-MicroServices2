@@ -27,20 +27,7 @@ import {
   TransactionCategory, ApprovalStatus, ChatMessage
 } from './types';
 
-// Firebase Realtime Database Imports
-import { db } from './services/firebase';
-import { 
-  ref, 
-  onValue, 
-  set, 
-  push, 
-  update, 
-  remove, 
-  query, 
-  orderByChild 
-} from 'firebase/database';
-
-// Mock Initial Data (Used for bootstrapping DB or fallback)
+// Mock Initial Data for Authentication
 const INITIAL_USERS: SystemUser[] = [
   { username: 'admin', role: UserRole.MASTER_ADMIN, isActive: true, password: 'password' },
   { username: 'manager', role: UserRole.HOB, isActive: true, password: 'password' },
@@ -53,7 +40,6 @@ const App: React.FC = () => {
   const [loginPass, setLoginPass] = useState('');
   const [loginError, setLoginError] = useState('');
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [isDbConnected, setIsDbConnected] = useState(false);
   
   // Data State
   const [loans, setLoans] = useState<Loan[]>([]);
@@ -63,85 +49,50 @@ const App: React.FC = () => {
   const [requests] = useState<ResetRequest[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   
-  // --- REAL-TIME SYNC ENGINE (RTDB) ---
+  // --- LOCAL STORAGE ENGINE (FRONTEND ONLY) ---
+  
+  // 1. Load Data on Mount
   useEffect(() => {
-    if (!db) {
-      // Fallback to local memory if Firebase keys aren't set
-      setLoans(INITIAL_LOANS);
-      setUsers(INITIAL_USERS);
-      return;
+    // Attempt to load from local storage
+    const storedLoans = localStorage.getItem('adt_loans');
+    const storedUsers = localStorage.getItem('adt_users');
+    const storedLogs = localStorage.getItem('adt_logs');
+    const storedMessages = localStorage.getItem('adt_messages');
+
+    if (storedLoans) {
+        setLoans(JSON.parse(storedLoans));
+    } else {
+        // If no local data, use the Constants mock data
+        setLoans(INITIAL_LOANS);
     }
 
-    setIsDbConnected(true);
+    if (storedUsers) {
+        setUsers(JSON.parse(storedUsers));
+    } else {
+        setUsers(INITIAL_USERS);
+    }
 
-    // 1. Sync Loans
-    const loansRef = ref(db, 'loans');
-    const unsubLoans = onValue(loansRef, (snapshot) => {
-      const data = snapshot.val();
-      if (data) {
-        // Convert Object {id: Loan} to Array [Loan]
-        const loanArray = Object.values(data) as Loan[];
-        // Ensure arrays like payments exist even if empty in DB
-        const sanitizedLoans = loanArray.map(l => ({
-            ...l,
-            payments: l.payments || [],
-            pendingRequests: l.pendingRequests || [],
-            activityLog: l.activityLog || []
-        }));
-        setLoans(sanitizedLoans);
-      } else {
-        setLoans([]);
-      }
-    });
-
-    // 2. Sync Users (Bootstrap if empty)
-    const usersRef = ref(db, 'users');
-    const unsubUsers = onValue(usersRef, (snapshot) => {
-      const data = snapshot.val();
-      if (!data) {
-        // Bootstrap initial users if DB is empty
-        INITIAL_USERS.forEach(u => {
-            set(ref(db, `users/${u.username}`), u);
-        });
-      } else {
-        setUsers(Object.values(data) as SystemUser[]);
-      }
-    });
-
-    // 3. Sync Audit Logs
-    // RTDB doesn't sort by descending natively easily for arrays without a query, 
-    // we'll fetch all and sort in memory for simplicity or use orderByChild if indexed
-    const auditRef = query(ref(db, 'audit_logs'), orderByChild('timestamp'));
-    const unsubAudit = onValue(auditRef, (snapshot) => {
-      const data = snapshot.val();
-      if (data) {
-        const logArray = Object.values(data) as AuditLog[];
-        // Sort descending in memory
-        setAuditLogs(logArray.sort((a, b) => b.timestamp.localeCompare(a.timestamp)));
-      } else {
-        setAuditLogs([]);
-      }
-    });
-
-    // 4. Sync Chat Messages
-    const chatRef = query(ref(db, 'messages'), orderByChild('timestamp'));
-    const unsubChat = onValue(chatRef, (snapshot) => {
-      const data = snapshot.val();
-      if (data) {
-        const msgArray = Object.values(data) as ChatMessage[];
-        setMessages(msgArray); // Already sorted by timestamp roughly due to push IDs or explicit timestamp
-      } else {
-        setMessages([]);
-      }
-    });
-
-    return () => {
-      unsubLoans();
-      unsubUsers();
-      unsubAudit();
-      unsubChat();
-    };
+    if (storedLogs) setAuditLogs(JSON.parse(storedLogs));
+    if (storedMessages) setMessages(JSON.parse(storedMessages));
   }, []);
+
+  // 2. Save Data on Change
+  useEffect(() => {
+    if (loans.length > 0) localStorage.setItem('adt_loans', JSON.stringify(loans));
+  }, [loans]);
+
+  useEffect(() => {
+    if (users.length > 0) localStorage.setItem('adt_users', JSON.stringify(users));
+  }, [users]);
+
+  useEffect(() => {
+    if (auditLogs.length > 0) localStorage.setItem('adt_logs', JSON.stringify(auditLogs));
+  }, [auditLogs]);
+
+  useEffect(() => {
+    if (messages.length > 0) localStorage.setItem('adt_messages', JSON.stringify(messages));
+  }, [messages]);
+
 
   // Handlers
   const handleLogin = (e: React.FormEvent) => {
@@ -169,7 +120,7 @@ const App: React.FC = () => {
     setActiveTab('dashboard');
   };
 
-  const addAuditLog = async (action: string, details: string, severity: 'INFO' | 'WARNING' | 'CRITICAL') => {
+  const addAuditLog = (action: string, details: string, severity: 'INFO' | 'WARNING' | 'CRITICAL') => {
     const newLog: AuditLog = {
       id: Date.now().toString(),
       timestamp: new Date().toISOString(),
@@ -179,44 +130,26 @@ const App: React.FC = () => {
       details,
       severity
     };
-
-    if (db) {
-      // Use push() to generate a unique ID automatically
-      push(ref(db, 'audit_logs'), newLog);
-    } else {
-      setAuditLogs(prev => [newLog, ...prev]);
-    }
+    setAuditLogs(prev => [newLog, ...prev]);
   };
 
   // Data Update Handlers
-  const handleAddLoan = async (loan: Loan) => {
-    if (db) {
-      await set(ref(db, `loans/${loan.id}`), loan);
-    } else {
-      setLoans(prev => [...prev, loan]);
-    }
+  const handleAddLoan = (loan: Loan) => {
+    setLoans(prev => [...prev, loan]);
     addAuditLog('Create Loan', `Registered new loan for ${loan.borrowerName} (ID: ${loan.id})`, 'INFO');
   };
 
-  const handleUpdateLoan = async (updatedLoan: Loan) => {
-    if (db) {
-      await update(ref(db, `loans/${updatedLoan.id}`), updatedLoan);
-    } else {
-      setLoans(prev => prev.map(l => l.id === updatedLoan.id ? updatedLoan : l));
-    }
+  const handleUpdateLoan = (updatedLoan: Loan) => {
+    setLoans(prev => prev.map(l => l.id === updatedLoan.id ? updatedLoan : l));
     addAuditLog('Update Loan', `Updated profile for ${updatedLoan.borrowerName}`, 'INFO');
   };
 
-  const handleDeleteLoan = async (id: string) => {
-    if (db) {
-      await remove(ref(db, `loans/${id}`));
-    } else {
-      setLoans(prev => prev.filter(l => l.id !== id));
-    }
+  const handleDeleteLoan = (id: string) => {
+    setLoans(prev => prev.filter(l => l.id !== id));
     addAuditLog('Delete Loan', `Deleted loan record ID: ${id}`, 'CRITICAL');
   };
 
-  const handleTransaction = async (loanId: string, category: TransactionCategory, direction: 'In' | 'Out', amount: number, notes: string) => {
+  const handleTransaction = (loanId: string, category: TransactionCategory, direction: 'In' | 'Out', amount: number, notes: string) => {
     const loan = loans.find(l => l.id === loanId);
     if (!loan) return;
 
@@ -232,13 +165,9 @@ const App: React.FC = () => {
             loanGroup: loan.groupName
         };
         
-        if (db) {
-           const newRequests = [...(loan.pendingRequests || []), request];
-           await update(ref(db, `loans/${loanId}`), { pendingRequests: newRequests });
-        } else {
-           const updatedLoan = { ...loan, pendingRequests: [...(loan.pendingRequests || []), request] };
-           setLoans(prev => prev.map(l => l.id === loanId ? updatedLoan : l));
-        }
+        const updatedLoan = { ...loan, pendingRequests: [...(loan.pendingRequests || []), request] };
+        setLoans(prev => prev.map(l => l.id === loanId ? updatedLoan : l));
+        
         addAuditLog('Request Withdrawal', `Requested ${category} withdrawal of ${amount} for ${loan.borrowerName}`, 'WARNING');
         return;
     }
@@ -258,26 +187,18 @@ const App: React.FC = () => {
     if (category === 'Savings') updatedSavings += (direction === 'In' ? amount : -amount);
     if (category === 'Adashe') updatedAdashe += (direction === 'In' ? amount : -amount);
 
-    if (db) {
-      await update(ref(db, `loans/${loanId}`), {
-        payments: [...(loan.payments || []), newPayment],
-        savingsBalance: updatedSavings,
-        adasheBalance: updatedAdashe
-      });
-    } else {
-      const updatedLoan = { 
-        ...loan, 
-        payments: [...(loan.payments || []), newPayment],
-        savingsBalance: updatedSavings,
-        adasheBalance: updatedAdashe
-      };
-      setLoans(prev => prev.map(l => l.id === loanId ? updatedLoan : l));
-    }
+    const updatedLoan = { 
+      ...loan, 
+      payments: [...(loan.payments || []), newPayment],
+      savingsBalance: updatedSavings,
+      adasheBalance: updatedAdashe
+    };
+    setLoans(prev => prev.map(l => l.id === loanId ? updatedLoan : l));
     
     addAuditLog('Post Transaction', `Posted ${direction} ${category} of ${amount} for ${loan.borrowerName}`, 'INFO');
   };
 
-  const handleDeleteTransaction = async (loanId: string, txnId: string) => {
+  const handleDeleteTransaction = (loanId: string, txnId: string) => {
       const loan = loans.find(l => l.id === loanId);
       if(!loan) return;
       const txn = (loan.payments || []).find(p => p.id === txnId);
@@ -295,27 +216,19 @@ const App: React.FC = () => {
 
       const updatedPayments = (loan.payments || []).filter(p => p.id !== txnId);
 
-      if (db) {
-        await update(ref(db, `loans/${loanId}`), {
+      const updatedLoan = {
+          ...loan,
           payments: updatedPayments,
           savingsBalance: updatedSavings,
           adasheBalance: updatedAdashe
-        });
-      } else {
-        const updatedLoan = {
-            ...loan,
-            payments: updatedPayments,
-            savingsBalance: updatedSavings,
-            adasheBalance: updatedAdashe
-        };
-        setLoans(prev => prev.map(l => l.id === loanId ? updatedLoan : l));
-      }
+      };
+      setLoans(prev => prev.map(l => l.id === loanId ? updatedLoan : l));
       
       addAuditLog('Delete Transaction', `Reversed ${txn.category} transaction ${txnId} for ${loan.borrowerName}`, 'WARNING');
   };
 
   // Approval Handlers
-  const handleApproveLoan = async (loanId: string, currentStatus: ApprovalStatus) => {
+  const handleApproveLoan = (loanId: string, currentStatus: ApprovalStatus) => {
       let nextStatus = currentStatus;
       if (currentStatus === ApprovalStatus.PENDING_BDM) nextStatus = ApprovalStatus.PENDING_SFO;
       else if (currentStatus === ApprovalStatus.PENDING_SFO) nextStatus = ApprovalStatus.PENDING_HOB;
@@ -325,25 +238,17 @@ const App: React.FC = () => {
         ? { disbursementStatus: nextStatus, status: 'Current' }
         : { disbursementStatus: nextStatus };
 
-      if (db) {
-        await update(ref(db, `loans/${loanId}`), finalUpdates);
-      } else {
-        setLoans(prev => prev.map(l => l.id === loanId ? { ...l, ...finalUpdates } as Loan : l));
-      }
+      setLoans(prev => prev.map(l => l.id === loanId ? { ...l, ...finalUpdates } as Loan : l));
       
       addAuditLog('Approve Loan', `Advanced loan ${loanId} to ${nextStatus}`, 'INFO');
   };
 
-  const handleRejectLoan = async (loanId: string) => {
-      if (db) {
-        await update(ref(db, `loans/${loanId}`), { disbursementStatus: ApprovalStatus.REJECTED });
-      } else {
-        setLoans(prev => prev.map(l => l.id === loanId ? { ...l, disbursementStatus: ApprovalStatus.REJECTED } : l));
-      }
+  const handleRejectLoan = (loanId: string) => {
+      setLoans(prev => prev.map(l => l.id === loanId ? { ...l, disbursementStatus: ApprovalStatus.REJECTED } : l));
       addAuditLog('Reject Loan', `Rejected loan application ${loanId}`, 'WARNING');
   };
 
-  const handleApproveTransaction = async (loanId: string, reqId: string, currentStatus: ApprovalStatus) => {
+  const handleApproveTransaction = (loanId: string, reqId: string, currentStatus: ApprovalStatus) => {
       let nextStatus = currentStatus;
       if (currentStatus === ApprovalStatus.PENDING_BDM) nextStatus = ApprovalStatus.PENDING_SFO;
       else if (currentStatus === ApprovalStatus.PENDING_SFO) nextStatus = ApprovalStatus.PENDING_HOB;
@@ -372,23 +277,14 @@ const App: React.FC = () => {
 
               const remainingRequests = (loan.pendingRequests || []).filter(r => r.id !== reqId);
 
-              if (db) {
-                await update(ref(db, `loans/${loanId}`), {
-                   payments: [...(loan.payments || []), newPayment],
-                   savingsBalance: updatedSavings,
-                   adasheBalance: updatedAdashe,
-                   pendingRequests: remainingRequests
-                });
-              } else {
-                 const updatedLoan = {
-                    ...loan,
-                    payments: [...(loan.payments || []), newPayment],
-                    savingsBalance: updatedSavings,
-                    adasheBalance: updatedAdashe,
-                    pendingRequests: remainingRequests
-                 };
-                 setLoans(prev => prev.map(l => l.id === loanId ? updatedLoan : l));
-              }
+              const updatedLoan = {
+                ...loan,
+                payments: [...(loan.payments || []), newPayment],
+                savingsBalance: updatedSavings,
+                adasheBalance: updatedAdashe,
+                pendingRequests: remainingRequests
+              };
+              setLoans(prev => prev.map(l => l.id === loanId ? updatedLoan : l));
               
               addAuditLog('Approve Withdrawal', `Final approval for ${req.category} withdrawal of ${req.amount}`, 'INFO');
               return;
@@ -397,58 +293,39 @@ const App: React.FC = () => {
 
       // Just update status if not final approval
       const updatedRequests = (loan.pendingRequests || []).map(r => r.id === reqId ? { ...r, status: nextStatus } : r);
-      if (db) {
-        await update(ref(db, `loans/${loanId}`), { pendingRequests: updatedRequests });
-      } else {
-        setLoans(prev => prev.map(l => l.id === loanId ? { ...l, pendingRequests: updatedRequests } : l));
-      }
+      setLoans(prev => prev.map(l => l.id === loanId ? { ...l, pendingRequests: updatedRequests } : l));
+      
       addAuditLog('Approve Step', `Advanced transaction request ${reqId} to ${nextStatus}`, 'INFO');
   };
 
-  const handleRejectTransaction = async (loanId: string, reqId: string) => {
+  const handleRejectTransaction = (loanId: string, reqId: string) => {
       const loan = loans.find(l => l.id === loanId);
       if (!loan) return;
       
       const updatedRequests = (loan.pendingRequests || []).map(r => r.id === reqId ? { ...r, status: ApprovalStatus.REJECTED } : r);
+      setLoans(prev => prev.map(l => l.id === loanId ? { ...l, pendingRequests: updatedRequests } : l));
       
-      if (db) {
-        await update(ref(db, `loans/${loanId}`), { pendingRequests: updatedRequests });
-      } else {
-        setLoans(prev => prev.map(l => l.id === loanId ? { ...l, pendingRequests: updatedRequests } : l));
-      }
       addAuditLog('Reject Withdrawal', `Rejected transaction request ${reqId}`, 'WARNING');
   };
 
   // User Management
-  const handleAddUser = async (user: SystemUser) => {
-      if (db) {
-        await set(ref(db, `users/${user.username}`), user);
-      } else {
-        setUsers(prev => [...prev, user]);
-      }
+  const handleAddUser = (user: SystemUser) => {
+      setUsers(prev => [...prev, user]);
       addAuditLog('Create User', `Created user ${user.username}`, 'CRITICAL');
   };
 
-  const handleDeleteUser = async (username: string) => {
-      if (db) {
-        await remove(ref(db, `users/${username}`));
-      } else {
-        setUsers(prev => prev.filter(u => u.username !== username));
-      }
+  const handleDeleteUser = (username: string) => {
+      setUsers(prev => prev.filter(u => u.username !== username));
       addAuditLog('Delete User', `Deleted user ${username}`, 'CRITICAL');
   };
 
-  const handleUpdateUserRole = async (username: string, role: UserRole) => {
-      if (db) {
-        await update(ref(db, `users/${username}`), { role });
-      } else {
-        setUsers(prev => prev.map(u => u.username === username ? { ...u, role } : u));
-      }
+  const handleUpdateUserRole = (username: string, role: UserRole) => {
+      setUsers(prev => prev.map(u => u.username === username ? { ...u, role } : u));
       addAuditLog('Update Role', `Changed role for ${username} to ${role}`, 'CRITICAL');
   };
 
   // Chat
-  const handleSendMessage = async (content: string, channel: string) => {
+  const handleSendMessage = (content: string, channel: string) => {
       const msg: ChatMessage = {
           id: Date.now().toString(),
           sender: currentUser!.username,
@@ -457,12 +334,7 @@ const App: React.FC = () => {
           timestamp: new Date().toISOString(),
           channel
       };
-      
-      if (db) {
-        push(ref(db, 'messages'), msg);
-      } else {
-        setMessages(prev => [...prev, msg]);
-      }
+      setMessages(prev => [...prev, msg]);
   };
 
   if (!currentUser) {
@@ -489,13 +361,6 @@ const App: React.FC = () => {
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.25em] mt-2">
                   AWAKE MICROCREDIT SERVICES
                 </p>
-                {/* DB Status Indicator */}
-                <div className="mt-4 flex justify-center">
-                   <div className={`px-3 py-1 rounded-full text-[9px] font-bold uppercase flex items-center gap-2 border ${isDbConnected ? 'bg-emerald-900/50 text-emerald-400 border-emerald-500/30' : 'bg-amber-900/50 text-amber-400 border-amber-500/30'}`}>
-                      <div className={`w-1.5 h-1.5 rounded-full ${isDbConnected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`}></div>
-                      {isDbConnected ? 'Realtime DB Active' : 'Local Demo Mode'}
-                   </div>
-                </div>
               </div>
               
               {/* Login Form */}
