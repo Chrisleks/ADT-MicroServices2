@@ -1,0 +1,7 @@
+{
+  "name": "ADT MicroServices2",
+  "description": "Comprehensive loan management system for TEKAN PEACE DESK AWAKE with offline capabilities and AI risk analysis.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
