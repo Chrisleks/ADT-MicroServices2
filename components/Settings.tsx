@@ -112,6 +112,13 @@ const Settings: React.FC<SettingsProps> = ({
     }
   };
 
+  const handleFactoryReset = () => {
+    if (window.confirm("CRITICAL WARNING: This will wipe ALL data (Loans, Users, Logs, Chats) from this device. The app will return to its initial default state. Are you sure?")) {
+        localStorage.clear();
+        window.location.reload();
+    }
+  };
+
   return (
     <div className="space-y-8 pb-20 animate-fade-in">
       {/* Header */}
@@ -592,6 +599,16 @@ const Settings: React.FC<SettingsProps> = ({
                      <span>{syncStatus === 'syncing' ? '⏳' : '🔄'}</span> {syncStatus === 'syncing' ? 'Syncing to Cloud...' : 'Sync with Cloud Backup'}
                   </button>
                </div>
+
+                <div className="bg-white p-6 rounded-2xl border border-red-200 shadow-sm mt-6">
+                    <h3 className="font-black text-rose-600 text-sm uppercase mb-4">Danger Zone</h3>
+                    <button 
+                        onClick={handleFactoryReset}
+                        className="w-full py-4 bg-rose-600 text-white rounded-xl text-xs font-black uppercase tracking-widest shadow-lg hover:bg-rose-700 transition-all flex items-center justify-center gap-2"
+                    >
+                        <span>☢️</span> Factory Reset Application
+                    </button>
+                </div>
             </div>
          </div>
       )}
