@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { UserRole, AppNotification } from '../types';
 import { Logo } from './Logo';
@@ -21,7 +22,6 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, role
 
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: '📊', roles: [UserRole.MASTER_ADMIN, UserRole.BDM, UserRole.HOB, UserRole.SFO, UserRole.ACCOUNTANT, UserRole.AUDITOR] },
-    { id: 'ai_tutor', label: 'AI Math Tutor', icon: '🦉', roles: [UserRole.MASTER_ADMIN, UserRole.BDM, UserRole.HOB, UserRole.SFO, UserRole.FIELD_OFFICER, UserRole.ACCOUNTANT, UserRole.AUDITOR, UserRole.ENCODER] },
     { id: 'chat', label: 'Team Chat', icon: '💬', roles: [UserRole.MASTER_ADMIN, UserRole.BDM, UserRole.HOB, UserRole.SFO, UserRole.ENCODER, UserRole.FIELD_OFFICER, UserRole.ACCOUNTANT, UserRole.AUDITOR] },
     { id: 'communication', label: 'Communication', icon: '📡', roles: [UserRole.MASTER_ADMIN, UserRole.BDM, UserRole.HOB, UserRole.SFO, UserRole.FIELD_OFFICER] },
     { id: 'ledger', label: 'General Ledger', icon: '📒', roles: [UserRole.MASTER_ADMIN, UserRole.HOB, UserRole.SFO, UserRole.ACCOUNTANT, UserRole.AUDITOR] },

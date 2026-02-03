@@ -9,7 +9,7 @@ interface ReportsProps {
 const Reports: React.FC<ReportsProps> = ({ loans }) => {
   const handlePrint = () => window.print();
 
-  const groupData = (loans || []).reduce((acc: Record<string, GroupSummary>, loan) => {
+  const groupData = loans.reduce((acc: Record<string, GroupSummary>, loan) => {
     if (!acc[loan.groupName]) {
       acc[loan.groupName] = {
         groupName: loan.groupName,
@@ -19,7 +19,7 @@ const Reports: React.FC<ReportsProps> = ({ loans }) => {
         totalAdasheBalance: 0
       };
     }
-    const paid = (loan.payments || []).filter(p => p.category === 'Loan Instalment' && p.direction === 'In').reduce((sum, p) => sum + p.amount, 0);
+    const paid = loan.payments.filter(p => p.category === 'Loan Instalment' && p.direction === 'In').reduce((sum, p) => sum + p.amount, 0);
     acc[loan.groupName].memberCount++;
     acc[loan.groupName].totalLoanBalance += (loan.principal - paid);
     acc[loan.groupName].totalSavingsBalance += loan.savingsBalance;
@@ -36,7 +36,7 @@ const Reports: React.FC<ReportsProps> = ({ loans }) => {
           <h2 className="text-2xl font-bold text-slate-800">Operational Reports</h2>
           <p className="text-slate-500">Aggregate metrics for Groups and Collections</p>
         </div>
-        <button
+        <button 
           onClick={handlePrint}
           className="bg-blue-600 text-white px-6 py-2 rounded-lg font-black text-xs uppercase tracking-widest shadow-lg flex items-center gap-2"
         >
@@ -88,12 +88,12 @@ const Reports: React.FC<ReportsProps> = ({ loans }) => {
             <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-4 print:text-black">Portfolio At Risk (PAR)</h3>
             <div className="space-y-4">
                {[LoanStatus.WATCH, LoanStatus.SUBSTANDARD, LoanStatus.DOUBTFUL, LoanStatus.LOSS].map(status => {
-                 const amount = (loans || []).filter(l => l.status === status).reduce((sum, l) => {
-                    const paid = (l.payments || []).filter(p => p.category === 'Loan Instalment' && p.direction === 'In').reduce((s, p) => s + p.amount, 0);
+                 const amount = loans.filter(l => l.status === status).reduce((sum, l) => {
+                    const paid = l.payments.filter(p => p.category === 'Loan Instalment' && p.direction === 'In').reduce((s, p) => s + p.amount, 0);
                     return sum + (l.principal - paid);
                  }, 0);
-                 const count = (loans || []).filter(l => l.status === status).length;
-
+                 const count = loans.filter(l => l.status === status).length;
+                 
                  const statusColors = {
                     [LoanStatus.WATCH]: "text-yellow-400",
                     [LoanStatus.SUBSTANDARD]: "text-orange-400",
@@ -120,7 +120,7 @@ const Reports: React.FC<ReportsProps> = ({ loans }) => {
              <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-4 print:text-black">Officer Performance</h3>
              <div className="space-y-3">
                {['CD', 'CL', 'GPK'].map(off => {
-                 const count = (loans || []).filter(l => l.creditOfficer === off).length;
+                 const count = loans.filter(l => l.creditOfficer === off).length;
                  return (
                    <div key={off} className="flex justify-between items-center bg-slate-50 p-3 rounded-lg print:bg-white print:border print:border-slate-200">
                      <span className="font-black text-slate-700 print:text-black">{off}</span>
@@ -132,7 +132,7 @@ const Reports: React.FC<ReportsProps> = ({ loans }) => {
           </div>
         </div>
       </div>
-
+      
       <div className="hidden print:grid grid-cols-3 gap-12 text-center text-[10px] font-black uppercase tracking-widest mt-24">
          <div className="border-t-2 border-slate-800 pt-3">Head of Business</div>
          <div className="border-t-2 border-slate-800 pt-3">Branch Manager</div>

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Loan, TransactionCategory, UserRole, OfflineTransaction } from '../types';
 import { sanitizeInput } from '../utils/security';

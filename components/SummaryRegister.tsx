@@ -17,17 +17,17 @@ const SummaryRegister: React.FC<SummaryRegisterProps> = ({ loans }) => {
   }, []);
   
   const getDailyTotals = (type: 'Loan Instalment' | 'Savings' | 'Adashe') => {
-    return (loans || []).flatMap(l => l.payments || [])
+    return loans.flatMap(l => l.payments)
       .filter(p => p.date === today && p.category === type)
       .reduce((sum, p) => sum + (p.direction === 'In' ? p.amount : -p.amount), 0);
   };
 
   const getPreviousBalances = (type: 'Loan' | 'Savings' | 'Adashe') => {
-    if (type === 'Savings') return (loans || []).reduce((sum, l) => sum + l.savingsBalance, 0) - getDailyTotals('Savings');
-    if (type === 'Adashe') return (loans || []).reduce((sum, l) => sum + l.adasheBalance, 0) - getDailyTotals('Adashe');
+    if (type === 'Savings') return loans.reduce((sum, l) => sum + l.savingsBalance, 0) - getDailyTotals('Savings');
+    if (type === 'Adashe') return loans.reduce((sum, l) => sum + l.adasheBalance, 0) - getDailyTotals('Adashe');
     
-    const totalCurrentOutstanding = (loans || []).reduce((sum, l) => {
-      const paid = (l.payments || []).filter(p => p.category === 'Loan Instalment' && p.direction === 'In').reduce((pSum, p) => pSum + p.amount, 0);
+    const totalCurrentOutstanding = loans.reduce((sum, l) => {
+      const paid = l.payments.filter(p => p.category === 'Loan Instalment' && p.direction === 'In').reduce((pSum, p) => pSum + p.amount, 0);
       return sum + (l.principal - paid);
     }, 0);
     return totalCurrentOutstanding + getDailyTotals('Loan Instalment');
@@ -81,7 +81,7 @@ const SummaryRegister: React.FC<SummaryRegisterProps> = ({ loans }) => {
         <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-6 print:text-black">Categorized Collections (Today)</h3>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 print:grid-cols-2">
           {['Risk Premium', 'Admission Fee', 'Membership fee', 'Form/card', 'Bank Deposit'].map(cat => {
-            const amount = (loans || []).flatMap(l => l.payments || []).filter(p => p.date === today && p.category === cat).reduce((sum, p) => sum + p.amount, 0);
+            const amount = loans.flatMap(l => l.payments).filter(p => p.date === today && p.category === cat).reduce((sum, p) => sum + p.amount, 0);
             return (
               <div key={cat} className="p-3 bg-slate-50 rounded-lg border border-slate-100 print:bg-white print:border-slate-800">
                 <div className="text-[9px] font-bold text-slate-500 uppercase print:text-black">{cat}</div>

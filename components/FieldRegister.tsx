@@ -10,12 +10,12 @@ const FieldRegister: React.FC<FieldRegisterProps> = ({ loans }) => {
   const handlePrint = () => window.print();
 
   // Automatically trigger print dialog when the user clicks/navigates to this sheet
-  /* useEffect(() => {
+  useEffect(() => {
     const timer = setTimeout(() => {
       window.print();
     }, 800); // Small delay to allow layout to settle
     return () => clearTimeout(timer);
-  }, []); */
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -81,7 +81,7 @@ const FieldRegister: React.FC<FieldRegisterProps> = ({ loans }) => {
           </thead>
           <tbody className="divide-y divide-slate-800">
             {loans.map(loan => {
-               const paid = (loan.payments || []).filter(p => p.category === 'Loan Instalment' && p.direction === 'In').reduce((s, p) => s + p.amount, 0);
+               const paid = loan.payments.filter(p => p.category === 'Loan Instalment' && p.direction === 'In').reduce((s, p) => s + p.amount, 0);
                return (
                 <tr key={loan.id} className="hover:bg-slate-50 transition-colors">
                   <td className="p-1 border border-slate-800 font-mono font-black">{loan.id}</td>
@@ -95,12 +95,12 @@ const FieldRegister: React.FC<FieldRegisterProps> = ({ loans }) => {
                   <td className="p-1 border border-slate-800">{loan.loanDisbursementDate}</td>
                   
                   {[1, 2, 3, 4, 5].map(wk => {
-                    const wkd = (loan.weeks as any)?.[wk];
+                    const wkd = (loan.weeks as any)[wk];
                     return (
                       <React.Fragment key={wk}>
-                        <td className="p-1 border border-slate-800 text-right bg-blue-50/10">{wkd?.savings || '-'}</td>
-                        <td className="p-1 border border-slate-800 text-right bg-blue-50/10">{wkd?.adashe || '-'}</td>
-                        <td className="p-1 border border-slate-800 text-right bg-blue-50/10">{wkd?.loan || '-'}</td>
+                        <td className="p-1 border border-slate-800 text-right bg-blue-50/10">{wkd.savings || '-'}</td>
+                        <td className="p-1 border border-slate-800 text-right bg-blue-50/10">{wkd.adashe || '-'}</td>
+                        <td className="p-1 border border-slate-800 text-right bg-blue-50/10">{wkd.loan || '-'}</td>
                       </React.Fragment>
                     );
                   })}

@@ -16,8 +16,8 @@ const GeneralLedger: React.FC<GeneralLedgerProps> = ({ loans }) => {
 
   // Flatten and process all transactions
   const ledgerData = useMemo(() => {
-    let allTransactions = (loans || []).flatMap(loan => 
-      (loan.payments || []).map(p => ({
+    let allTransactions = loans.flatMap(loan => 
+      loan.payments.map(p => ({
         ...p,
         loanId: loan.id,
         borrowerName: loan.borrowerName,

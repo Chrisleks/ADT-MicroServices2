@@ -1,3 +1,4 @@
+
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getDatabase } from 'firebase/database';
@@ -8,8 +9,15 @@ import { getStorage } from 'firebase/storage';
 const meta = import.meta as any;
 const env = meta.env || {};
 
+const apiKey = env.VITE_FIREBASE_API_KEY;
+// Basic validation to check if the user has replaced the placeholder
+const isConfigured = apiKey && 
+                     apiKey !== 'paste_your_apiKey_here' && 
+                     apiKey !== 'PLACEHOLDER_API_KEY' &&
+                     !apiKey.includes('paste_your');
+
 const firebaseConfig = {
-  apiKey: env.VITE_FIREBASE_API_KEY,
+  apiKey: apiKey,
   authDomain: env.VITE_FIREBASE_AUTH_DOMAIN,
   projectId: env.VITE_FIREBASE_PROJECT_ID,
   storageBucket: env.VITE_FIREBASE_STORAGE_BUCKET,
@@ -18,11 +26,23 @@ const firebaseConfig = {
   databaseURL: "https://adt-microcredit-services-default-rtdb.firebaseio.com/"
 };
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getDatabase(app);
-const storage = getStorage(app);
+let app = null;
+let auth = null;
+let db = null;
+let storage = null;
+
+if (isConfigured) {
+  try {
+    app = initializeApp(firebaseConfig);
+    auth = getAuth(app);
+    db = getDatabase(app);
+    storage = getStorage(app);
+  } catch (e) {
+    console.error("Firebase Initialization Error:", e);
+  }
+} else {
+  console.warn("⚠️ Firebase API Key missing or invalid. App running in DEMO/LOCAL mode.");
+}
 
 export { auth, db, storage };
 export default app;

@@ -9,7 +9,7 @@ interface CashbookProps {
 const Cashbook: React.FC<CashbookProps> = ({ loans }) => {
   const handlePrint = () => window.print();
 
-  const allPayments = (loans || []).flatMap(l => l.payments || []);
+  const allPayments = loans.flatMap(l => l.payments);
   const dates = Array.from(new Set(allPayments.map(p => p.date))).sort((a: string, b: string) => b.localeCompare(a));
 
   const dailySummaries = dates.map(date => {
@@ -100,7 +100,7 @@ const Cashbook: React.FC<CashbookProps> = ({ loans }) => {
           </tbody>
         </table>
       </div>
-
+      
       <div className="hidden print:grid grid-cols-2 gap-20 mt-20 text-center text-[11px] font-black uppercase">
         <div className="border-t-2 border-slate-900 pt-3">Finance Manager</div>
         <div className="border-t-2 border-slate-900 pt-3">Internal Control Audit</div>

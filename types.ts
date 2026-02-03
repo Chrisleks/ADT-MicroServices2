@@ -1,21 +1,4 @@
 
-// --- Chat / Socratic Tutor Types ---
-export interface Message {
-  id: string;
-  role: 'user' | 'model';
-  text: string;
-  image?: string; // Base64 string
-  isThinking?: boolean;
-}
-
-export interface ChatState {
-  messages: Message[];
-  isLoading: boolean;
-  error: string | null;
-}
-
-export type SendMessageFunction = (text: string, image?: string) => Promise<void>;
-
 // --- Microcredit App Types ---
 
 export enum UserRole {

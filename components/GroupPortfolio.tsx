@@ -8,22 +8,20 @@ interface GroupPortfolioProps {
 
 const GroupPortfolio: React.FC<GroupPortfolioProps> = ({ loans }) => {
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<'members' | 'transactions' | 'risk'>('members');
+  const [viewMode, setViewMode] = useState<'members' | 'transactions'>('members');
   const [transactionDate, setTransactionDate] = useState(new Date().toISOString().split('T')[0]);
-  const [statusFilter, setStatusFilter] = useState<LoanStatus | 'all'>('all');
-  const [searchTerm, setSearchTerm] = useState('');
 
   // Derive groups dynamically
   const groupStats = useMemo(() => {
-    const uniqueGroups = Array.from(new Set((loans || []).map(l => l.groupName)));
+    const uniqueGroups = Array.from(new Set(loans.map(l => l.groupName)));
     
     return uniqueGroups.map(groupName => {
-      const members = (loans || []).filter(l => l.groupName === groupName);
+      const members = loans.filter(l => l.groupName === groupName);
       const activeMembers = members.filter(l => l.status !== LoanStatus.LOSS && l.status !== LoanStatus.DOUBTFUL).length; 
       
       const totalPrincipal = members.reduce((sum, l) => {
          // Outstanding Principal
-         const paid = (l.payments || []).filter(p => p.category === 'Loan Instalment' && p.direction === 'In').reduce((s, p) => s + p.amount, 0);
+         const paid = l.payments.filter(p => p.category === 'Loan Instalment' && p.direction === 'In').reduce((s, p) => s + p.amount, 0);
          return sum + (l.principal - paid);
       }, 0);
 
@@ -42,14 +40,6 @@ const GroupPortfolio: React.FC<GroupPortfolioProps> = ({ loans }) => {
     });
   }, [loans]);
 
-  const filteredGroupStats = useMemo(() => {
-    return groupStats.filter(group => {
-      const statusMatch = statusFilter === 'all' || group.members.some(m => m.status === statusFilter);
-      const searchMatch = searchTerm === '' || group.name.toLowerCase().includes(searchTerm.toLowerCase());
-      return statusMatch && searchMatch;
-    });
-  }, [groupStats, statusFilter, searchTerm]);
-
   const selectedGroupData = useMemo(() => {
     return groupStats.find(g => g.name === selectedGroup);
   }, [groupStats, selectedGroup]);
@@ -59,7 +49,7 @@ const GroupPortfolio: React.FC<GroupPortfolioProps> = ({ loans }) => {
     if (!selectedGroupData) return [];
     
     return selectedGroupData.members.flatMap(member => 
-      (member.payments || [])
+      member.payments
         .filter(p => p.date === transactionDate)
         .map(p => ({
           ...p,
@@ -68,25 +58,6 @@ const GroupPortfolio: React.FC<GroupPortfolioProps> = ({ loans }) => {
         }))
     ).sort((a, b) => b.id.localeCompare(a.id)); // sort by transaction ID
   }, [selectedGroupData, transactionDate]);
-  
-  const riskProfile = useMemo(() => {
-    if (!selectedGroupData) return null;
-
-    const profile = {
-      [LoanStatus.CURRENT]: 0,
-      [LoanStatus.WATCH]: 0,
-      [LoanStatus.SUBSTANDARD]: 0,
-      [LoanStatus.DOUBTFUL]: 0,
-      [LoanStatus.LOSS]: 0,
-    };
-
-    selectedGroupData.members.forEach(member => {
-      profile[member.status]++;
-    });
-
-    return profile;
-  }, [selectedGroupData]);
-
 
   return (
     <div className="space-y-6 pb-20 animate-fade-in">
@@ -113,28 +84,7 @@ const GroupPortfolio: React.FC<GroupPortfolioProps> = ({ loans }) => {
       </div>
 
       {!selectedGroup ? (
-        <div>
-          {/* Filter and Search Controls */}
-          <div className="mb-4 flex gap-4">
-            <select
-              value={statusFilter}
-              onChange={e => setStatusFilter(e.target.value as LoanStatus | 'all')}
-              className="p-2 rounded-md border"
-            >
-              <option value="all">All Statuses</option>
-              {Object.values(LoanStatus).map(status => (
-                <option key={status} value={status}>{status}</option>
-              ))}
-            </select>
-            <input
-              type="text"
-              placeholder="Search by group name..."
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-              className="p-2 rounded-md border w-full"
-            />
-          </div>
-        {/* --- DIRECTORY VIEW (TABLE) --- */}
+        /* --- DIRECTORY VIEW (TABLE) --- */
         <div className="bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
@@ -149,8 +99,8 @@ const GroupPortfolio: React.FC<GroupPortfolioProps> = ({ loans }) => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                {filteredGroupStats.map((group) => (
-                  <tr key={group.name} className="hover:bg-slate-50 transition-colors group cursor-pointer" onClick={() => setSelectedGroup(group.name)}>\
+                {groupStats.map((group) => (
+                  <tr key={group.name} className="hover:bg-slate-50 transition-colors group cursor-pointer" onClick={() => setSelectedGroup(group.name)}>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
                          <div className="w-10 h-10 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center font-black text-sm border border-indigo-100">
@@ -184,7 +134,6 @@ const GroupPortfolio: React.FC<GroupPortfolioProps> = ({ loans }) => {
               </tbody>
             </table>
           </div>
-        </div>
         </div>
       ) : (
         /* --- DETAIL VIEW --- */
@@ -246,16 +195,6 @@ const GroupPortfolio: React.FC<GroupPortfolioProps> = ({ loans }) => {
               >
                 📅 Daily Transactions
               </button>
-              <button
-                onClick={() => setViewMode('risk')}
-                className={`px-6 py-3 text-xs font-black uppercase tracking-widest transition-all ${
-                  viewMode === 'risk'
-                  ? 'border-b-2 border-red-600 text-red-600'
-                  : 'text-slate-400 hover:text-slate-600'
-                }`}
-              >
-                ρί Risk Analysis
-              </button>
            </div>
 
            {/* Content Area */}
@@ -275,7 +214,7 @@ const GroupPortfolio: React.FC<GroupPortfolioProps> = ({ loans }) => {
                       </thead>
                       <tbody className="divide-y divide-slate-50">
                          {selectedGroupData?.members.map(member => {
-                            const paid = (member.payments || []).filter(p => p.category === 'Loan Instalment' && p.direction === 'In').reduce((s, p) => s + p.amount, 0);
+                            const paid = member.payments.filter(p => p.category === 'Loan Instalment' && p.direction === 'In').reduce((s, p) => s + p.amount, 0);
                             const loanBal = member.principal - paid;
                             return (
                                <tr key={member.id} className="hover:bg-slate-50">
@@ -301,7 +240,7 @@ const GroupPortfolio: React.FC<GroupPortfolioProps> = ({ loans }) => {
                       </tbody>
                    </table>
                 </div>
-              ) : viewMode === 'transactions' ? (
+              ) : (
                 <div>
                    {dailyTransactions.length > 0 ? (
                       <div className="overflow-x-auto">
@@ -351,20 +290,6 @@ const GroupPortfolio: React.FC<GroupPortfolioProps> = ({ loans }) => {
                          <p className="font-bold text-xs uppercase tracking-widest">No transactions found for {transactionDate}</p>
                       </div>
                    )}
-                </div>
-              ) : (
-                <div className="p-8">
-                  <h3 className="text-lg font-bold mb-4">Risk Analysis</h3>
-                  {riskProfile && (
-                    <div className="grid grid-cols-2 gap-4">
-                      {Object.entries(riskProfile).map(([status, count]) => (
-                        <div key={status} className="bg-gray-100 p-4 rounded-lg">
-                          <p className="text-sm font-medium text-gray-500">{status}</p>
-                          <p className="text-2xl font-bold">{count}</p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
                 </div>
               )}
            </div>
