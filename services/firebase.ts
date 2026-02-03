@@ -1,17 +1,21 @@
-
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getDatabase } from 'firebase/database';
 import { getStorage } from 'firebase/storage';
 
+// Cast import.meta to any to allow access to env property without TS errors
+// Use fallback object to prevent crash if env is undefined
+const meta = import.meta as any;
+const env = meta.env || {};
+
 const firebaseConfig = {
-  apiKey: "AIzaSyDPT5ADLfcKcI_HQL3PwiIg_X18e55fWOY",
-  authDomain: "adt-microservices-261424-b9a8f.firebaseapp.com",
-  databaseURL: "https://adt-microservices-261424-b9a8f-default-rtdb.firebaseio.com",
-  projectId: "adt-microservices-261424-b9a8f",
-  storageBucket: "adt-microservices-261424-b9a8f.appspot.com",
-  messagingSenderId: "646095691233",
-  appId: "1:646095691233:web:cf36ab0d959a282a7386a0"
+  apiKey: env.VITE_FIREBASE_API_KEY,
+  authDomain: env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: env.VITE_FIREBASE_APP_ID,
+  databaseURL: "https://adt-microcredit-services-default-rtdb.firebaseio.com/"
 };
 
 // Initialize Firebase
