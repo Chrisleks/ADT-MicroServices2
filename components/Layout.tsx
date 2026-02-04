@@ -22,6 +22,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, role
 
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: '📊', roles: [UserRole.MASTER_ADMIN, UserRole.BDM, UserRole.HOB, UserRole.SFO, UserRole.ACCOUNTANT, UserRole.AUDITOR] },
+    { id: 'ai_analyst', label: 'AI Analyst', icon: '🤖', roles: [UserRole.MASTER_ADMIN, UserRole.BDM, UserRole.HOB, UserRole.SFO, UserRole.ACCOUNTANT] },
     { id: 'chat', label: 'Team Chat', icon: '💬', roles: [UserRole.MASTER_ADMIN, UserRole.BDM, UserRole.HOB, UserRole.SFO, UserRole.ENCODER, UserRole.FIELD_OFFICER, UserRole.ACCOUNTANT, UserRole.AUDITOR] },
     { id: 'communication', label: 'Communication', icon: '📡', roles: [UserRole.MASTER_ADMIN, UserRole.BDM, UserRole.HOB, UserRole.SFO, UserRole.FIELD_OFFICER] },
     { id: 'ledger', label: 'General Ledger', icon: '📒', roles: [UserRole.MASTER_ADMIN, UserRole.HOB, UserRole.SFO, UserRole.ACCOUNTANT, UserRole.AUDITOR] },

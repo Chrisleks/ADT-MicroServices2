@@ -22,6 +22,7 @@ import Reports from './components/Reports';
 import AuditTrail from './components/AuditTrail';
 import Settings from './components/Settings';
 import Support from './components/Support';
+import AiAnalyst from './components/AiAnalyst';
 import { Logo } from './components/Logo';
 import { INITIAL_LOANS } from './constants';
 import {
@@ -757,6 +758,7 @@ const App: React.FC = () => {
             onSendMessage={handleSendMessage} 
          />
        )}
+       {activeTab === 'ai_analyst' && <AiAnalyst loans={loans} />}
        {activeTab === 'schedules' && <LoanSchedule loans={loans} />}
        {activeTab === 'communication' && <BulkMessage loans={loans} />}
        {activeTab === 'ledger' && <GeneralLedger loans={loans} />}

@@ -136,19 +136,23 @@ const Dashboard: React.FC<DashboardProps> = ({ loans, onNavigate }) => {
   const CustomBarTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       return (
-        <div className="bg-white p-3 border border-slate-100 shadow-xl rounded-xl text-xs z-50">
-          <p className="font-black text-slate-700 mb-2 uppercase tracking-wide">{label}</p>
-          {payload.map((entry: any, index: number) => (
-            <div key={index} className="flex items-center justify-between gap-4 mb-1">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.fill }}></div>
-                <span className="text-slate-500 font-medium">{entry.name}:</span>
+        <div className="bg-white border border-slate-200 shadow-2xl rounded-xl overflow-hidden z-50 min-w-[180px]">
+          <div className="bg-slate-50 px-4 py-2 border-b border-slate-100">
+            <p className="font-black text-slate-700 text-xs uppercase tracking-wide">{label}</p>
+          </div>
+          <div className="p-3 space-y-2">
+            {payload.map((entry: any, index: number) => (
+              <div key={index} className="flex items-center justify-between gap-4 text-xs">
+                <div className="flex items-center gap-2">
+                  <div className="w-2.5 h-2.5 rounded-full shadow-sm" style={{ backgroundColor: entry.fill }}></div>
+                  <span className="text-slate-500 font-bold">{entry.name}</span>
+                </div>
+                <span className="font-mono font-black text-slate-700">
+                  ₦{entry.value.toLocaleString()}
+                </span>
               </div>
-              <span className="font-bold text-slate-800 font-mono">
-                ₦{entry.value.toLocaleString()}
-              </span>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       );
     }
@@ -158,13 +162,26 @@ const Dashboard: React.FC<DashboardProps> = ({ loans, onNavigate }) => {
   const CustomPieTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
       const data = payload[0];
-      const percentage = ((data.value / (loans.length || 1)) * 100).toFixed(1);
+      // Calculate percentage based on total loans in the system
+      const total = loans.length || 1;
+      const percentage = ((data.value / total) * 100).toFixed(1);
+      
+      // Determine color
+      const color = data.payload.fill || COLORS[data.name as LoanStatus] || '#000';
+
       return (
-        <div className="bg-white p-2 border border-slate-100 shadow-lg rounded-lg text-xs">
-          <div className="flex items-center gap-2">
-             <span className="font-black text-slate-700">{data.name}</span>
-             <span className="text-slate-500">{data.value} ({percentage}%)</span>
-          </div>
+        <div className="bg-white border border-slate-200 shadow-2xl rounded-xl overflow-hidden z-50 min-w-[160px]">
+           <div className="px-4 py-2 border-b border-slate-100 flex items-center gap-2 bg-slate-50">
+              <div className="w-3 h-3 rounded-full shadow-sm" style={{ backgroundColor: color }}></div>
+              <span className="font-black text-slate-700 text-xs uppercase tracking-wide">{data.name}</span>
+           </div>
+           <div className="p-3 grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+              <span className="text-slate-500 font-medium">Count</span>
+              <span className="font-mono font-black text-slate-800 text-right">{data.value}</span>
+              
+              <span className="text-slate-500 font-medium">Share</span>
+              <span className="font-mono font-black text-slate-800 text-right">{percentage}%</span>
+           </div>
         </div>
       );
     }
