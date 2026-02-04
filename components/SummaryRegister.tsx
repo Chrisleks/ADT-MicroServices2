@@ -11,9 +11,12 @@ const SummaryRegister: React.FC<SummaryRegisterProps> = ({ loans }) => {
 
   const handlePrint = () => window.print();
 
+  // Auto-print when component loads (sheet behavior)
   useEffect(() => {
-    // Optional: Only enable if user specifically wants "print on click" everywhere
-    // handlePrint(); 
+    const timer = setTimeout(() => {
+      window.print();
+    }, 800);
+    return () => clearTimeout(timer);
   }, []);
   
   const getDailyTotals = (type: 'Loan Instalment' | 'Savings' | 'Adashe') => {

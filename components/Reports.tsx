@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Loan, LoanStatus, GroupSummary } from '../types';
 
 interface ReportsProps {
@@ -8,6 +8,14 @@ interface ReportsProps {
 
 const Reports: React.FC<ReportsProps> = ({ loans }) => {
   const handlePrint = () => window.print();
+
+  // Auto-print when component loads (sheet behavior)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      window.print();
+    }, 800);
+    return () => clearTimeout(timer);
+  }, []);
 
   const groupData = loans.reduce((acc: Record<string, GroupSummary>, loan) => {
     if (!acc[loan.groupName]) {

@@ -29,12 +29,12 @@ const FieldRegister: React.FC<FieldRegisterProps> = ({ loans }) => {
                 onClick={handlePrint}
                 className="bg-slate-900 text-white px-6 py-2 rounded-lg font-black text-xs uppercase tracking-widest shadow-lg flex items-center gap-2 transition-all hover:scale-105"
             >
-                <span>🖨️</span> Print ADT Sheet
+                <span>🖨️</span> PRINT SHEET
             </button>
         </div>
       </div>
 
-      <div className="bg-white p-6 border border-slate-300 rounded-sm shadow-sm overflow-x-auto print:shadow-none print:border-none print:p-0">
+      <div className="bg-white p-6 border border-slate-300 rounded-sm shadow-sm overflow-x-auto print:shadow-none print:border-none print:p-0 print:scale-95 print:origin-top-left print:w-[105%]">
         <div className="text-center mb-8 hidden print:block border-b-2 border-slate-800 pb-6">
           <h1 className="text-3xl font-black uppercase tracking-widest">TEKAN PEACE DESK Microcredit (ADT)</h1>
           <h2 className="text-xl font-bold uppercase tracking-widest text-slate-700 mt-2">ADT SHEET - WEEKLY REGISTER</h2>

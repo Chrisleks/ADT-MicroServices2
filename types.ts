@@ -21,7 +21,7 @@ export enum LoanStatus {
 }
 
 export enum LoanType {
-  BUSINESS = 'Business Loan (20%)',
+  BUSINESS = 'Business Loan (19%)',
   AGRIC = 'Agric Loan (20%)'
 }
 

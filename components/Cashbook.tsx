@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Loan, Payment } from '../types';
 
 interface CashbookProps {
@@ -8,6 +8,14 @@ interface CashbookProps {
 
 const Cashbook: React.FC<CashbookProps> = ({ loans }) => {
   const handlePrint = () => window.print();
+
+  // Auto-print when component loads (sheet behavior)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      window.print();
+    }, 800);
+    return () => clearTimeout(timer);
+  }, []);
 
   const allPayments = loans.flatMap(l => l.payments);
   const dates = Array.from(new Set(allPayments.map(p => p.date))).sort((a: string, b: string) => b.localeCompare(a));

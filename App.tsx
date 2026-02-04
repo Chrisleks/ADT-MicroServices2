@@ -38,9 +38,17 @@ const INITIAL_USERS: SystemUser[] = [
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<SystemUser | null>(null);
+  
+  // Login State
+  const [isForgotPassword, setIsForgotPassword] = useState(false);
   const [loginUser, setLoginUser] = useState('');
   const [loginPass, setLoginPass] = useState('');
   const [loginError, setLoginError] = useState('');
+  
+  // Recovery State
+  const [recoveryUser, setRecoveryUser] = useState('');
+  const [recoverySuccess, setRecoverySuccess] = useState(false);
+
   const [activeTab, setActiveTab] = useState('dashboard');
   
   // Connection States
@@ -52,13 +60,19 @@ const App: React.FC = () => {
   const [users, setUsers] = useState<SystemUser[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [notifications] = useState<AppNotification[]>([]);
-  const [requests] = useState<ResetRequest[]>([]);
+  const [requests, setRequests] = useState<ResetRequest[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   
   // --- 1. NETWORK LISTENER ---
   useEffect(() => {
-    const handleOnline = () => setIsNetworkOnline(true);
-    const handleOffline = () => setIsNetworkOnline(false);
+    const handleOnline = () => {
+        console.log("Network Online");
+        setIsNetworkOnline(true);
+    };
+    const handleOffline = () => {
+        console.log("Network Offline");
+        setIsNetworkOnline(false);
+    };
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
     return () => {
@@ -67,112 +81,109 @@ const App: React.FC = () => {
     };
   }, []);
 
-  // --- 2. DATA INITIALIZATION (Firebase vs Local) ---
+  // --- 2. DATA INITIALIZATION (Hybrid: Local First, then Firebase) ---
   useEffect(() => {
-    if (!db) {
-        setDbConnected(false);
-        console.log("App running in LOCAL/OFFLINE mode (No Firebase Config)");
+    // A. Always load from LocalStorage first (Cache Strategy)
+    try {
+        const storedLoans = localStorage.getItem('adt_loans');
+        const storedUsers = localStorage.getItem('adt_users');
+        const storedLogs = localStorage.getItem('adt_logs');
+        const storedMsgs = localStorage.getItem('adt_messages');
+
+        if (storedLoans) setLoans(JSON.parse(storedLoans));
+        else if (!db) setLoans(INITIAL_LOANS); // Fallback to initial only if no DB
+
+        if (storedUsers) setUsers(JSON.parse(storedUsers));
+        else if (!db) setUsers(INITIAL_USERS);
+
+        if (storedLogs) setAuditLogs(JSON.parse(storedLogs));
         
-        // Fallback: Load persistent data from LocalStorage
-        try {
-            const storedLoans = localStorage.getItem('adt_loans');
-            const storedUsers = localStorage.getItem('adt_users');
-            const storedLogs = localStorage.getItem('adt_logs');
-            const storedMsgs = localStorage.getItem('adt_messages');
+        if (storedMsgs) setMessages(JSON.parse(storedMsgs));
 
-            if (storedLoans) setLoans(JSON.parse(storedLoans));
-            else setLoans(INITIAL_LOANS);
-
-            if (storedUsers) setUsers(JSON.parse(storedUsers));
-            else setUsers(INITIAL_USERS);
-
-            if (storedLogs) setAuditLogs(JSON.parse(storedLogs));
-            
-            if (storedMsgs) setMessages(JSON.parse(storedMsgs));
-
-        } catch (e) {
-            console.error("Error loading local data:", e);
-            setLoans(INITIAL_LOANS);
-            setUsers(INITIAL_USERS);
-        }
-        return;
+    } catch (e) {
+        console.error("Error loading local data:", e);
     }
 
-    // Firebase Listeners
-    const loansRef = ref(db, 'loans');
-    const unsubLoans = onValue(loansRef, (snapshot) => {
-        const data = snapshot.val();
-        if (data) {
-            const loanArray = Object.values(data) as Loan[];
-            setLoans(loanArray);
-        } else {
-            setLoans([]);
-        }
-    }, (error) => {
-        console.error("Firebase Read Error", error);
-        setDbConnected(false); // Switch to offline UI if auth/network fails
-    });
-
-    const usersRef = ref(db, 'system_users');
-    const unsubUsers = onValue(usersRef, (snapshot) => {
-        const data = snapshot.val();
-        if (data) {
-            if (Array.isArray(data)) {
-                 setUsers(data);
-            } else {
-                 setUsers(Object.values(data));
+    // B. If Firebase is available, set up listeners (Sync Strategy)
+    if (db) {
+        // Loans
+        const loansRef = ref(db, 'loans');
+        const unsubLoans = onValue(loansRef, (snapshot) => {
+            const data = snapshot.val();
+            if (data) {
+                const loanArray = Object.values(data) as Loan[];
+                setLoans(loanArray);
             }
-        } else {
-            // Seed Initial Users if DB is empty
-            const seedRef = ref(db, 'system_users');
-            const userMap = INITIAL_USERS.reduce((acc, user) => ({...acc, [user.username]: user}), {});
-            set(seedRef, userMap);
-            setUsers(INITIAL_USERS);
-            
-            // Also seed loans if users are empty (implies fresh DB)
-            const loansSeedRef = ref(db, 'loans');
-            const loansMap = INITIAL_LOANS.reduce((acc, loan) => ({...acc, [loan.id]: loan}), {});
-            set(loansSeedRef, loansMap);
-        }
-    });
+        }, (error) => {
+            console.error("Firebase Read Error", error);
+            // Don't disable dbConnected here, just rely on local data
+        });
 
-    const logsRef = ref(db, 'audit_logs');
-    const unsubLogs = onValue(logsRef, (snapshot) => {
-        const data = snapshot.val();
-        if (data) setAuditLogs(Object.values(data).reverse() as AuditLog[]);
-        else setAuditLogs([]);
-    });
+        // Users
+        const usersRef = ref(db, 'system_users');
+        const unsubUsers = onValue(usersRef, (snapshot) => {
+            const data = snapshot.val();
+            if (data) {
+                if (Array.isArray(data)) {
+                     setUsers(data);
+                } else {
+                     setUsers(Object.values(data));
+                }
+            } else {
+                // Seed if empty
+                const seedRef = ref(db, 'system_users');
+                const userMap = INITIAL_USERS.reduce((acc, user) => ({...acc, [user.username]: user}), {});
+                set(seedRef, userMap);
+                setUsers(INITIAL_USERS);
+                
+                // Seed loans if needed
+                const loansSeedRef = ref(db, 'loans');
+                const loansMap = INITIAL_LOANS.reduce((acc, loan) => ({...acc, [loan.id]: loan}), {});
+                set(loansSeedRef, loansMap);
+            }
+        });
 
-    const chatRef = ref(db, 'chat_messages');
-    const unsubChat = onValue(chatRef, (snapshot) => {
-        const data = snapshot.val();
-        if (data) setMessages(Object.values(data));
-        else setMessages([]);
-    });
+        // Audit Logs
+        const logsRef = ref(db, 'audit_logs');
+        const unsubLogs = onValue(logsRef, (snapshot) => {
+            const data = snapshot.val();
+            if (data) setAuditLogs(Object.values(data).reverse() as AuditLog[]);
+        });
 
-    return () => {
-        unsubLoans();
-        unsubUsers();
-        unsubLogs();
-        unsubChat();
-    };
+        // Chat
+        const chatRef = ref(db, 'chat_messages');
+        const unsubChat = onValue(chatRef, (snapshot) => {
+            const data = snapshot.val();
+            if (data) setMessages(Object.values(data));
+        });
+
+        return () => {
+            unsubLoans();
+            unsubUsers();
+            unsubLogs();
+            unsubChat();
+        };
+    } else {
+        setDbConnected(false);
+        console.log("App running in LOCAL MODE (No Firebase Config)");
+    }
   }, []);
 
-  // --- 3. LOCAL STORAGE PERSISTENCE (Only if !db) ---
+  // --- 3. PERSISTENCE (Always backup to LocalStorage) ---
   useEffect(() => {
-    if (!db) localStorage.setItem('adt_loans', JSON.stringify(loans));
+    localStorage.setItem('adt_loans', JSON.stringify(loans));
   }, [loans]);
 
   useEffect(() => {
-    if (!db) localStorage.setItem('adt_users', JSON.stringify(users));
+    localStorage.setItem('adt_users', JSON.stringify(users));
   }, [users]);
 
   useEffect(() => {
-    if (!db) localStorage.setItem('adt_logs', JSON.stringify(auditLogs));
+    localStorage.setItem('adt_logs', JSON.stringify(auditLogs));
   }, [auditLogs]);
 
   useEffect(() => {
-    if (!db) localStorage.setItem('adt_messages', JSON.stringify(messages));
+    localStorage.setItem('adt_messages', JSON.stringify(messages));
   }, [messages]);
 
 
@@ -196,11 +207,35 @@ const App: React.FC = () => {
     }
   };
 
+  const handleForgotPassword = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!recoveryUser.trim()) return;
+
+    // Simulate sending email link
+    setTimeout(() => {
+        setRecoverySuccess(true);
+        // In background, log a request for admin just in case
+        const request: ResetRequest = {
+            id: `RST-${Date.now()}`,
+            timestamp: new Date().toISOString(),
+            username: recoveryUser,
+            phone: 'Email-Link-Request',
+            newPassword: 'USER-INITIATED',
+            status: 'Pending'
+        };
+        // Update local requests state specifically for this session logic, though normally synced with DB
+        setRequests(prev => [...prev, request]);
+    }, 1500);
+  };
+
   const handleLogout = () => {
     setCurrentUser(null);
     setLoginUser('');
     setLoginPass('');
     setActiveTab('dashboard');
+    setIsForgotPassword(false);
+    setRecoverySuccess(false);
+    setRecoveryUser('');
   };
 
   const addAuditLog = (action: string, details: string, severity: 'INFO' | 'WARNING' | 'CRITICAL') => {
@@ -214,43 +249,41 @@ const App: React.FC = () => {
       severity
     };
     
+    // Always update local state immediately
     if (!db) {
         setAuditLogs(prev => [newLog, ...prev]);
-        return;
+    } else {
+        push(ref(db, 'audit_logs'), newLog);
     }
-    push(ref(db, 'audit_logs'), newLog);
   };
 
-  // Data Update Handlers - With Local State Fallback
+  // Data Update Handlers
   const handleAddLoan = (loan: Loan) => {
     if (!db) {
         setLoans(prev => [...prev, loan]);
-        addAuditLog('Create Loan', `Registered new loan for ${loan.borrowerName} (ID: ${loan.id})`, 'INFO');
-        return;
+    } else {
+        // Firebase handles offline queuing automatically
+        set(ref(db, `loans/${loan.id}`), loan);
     }
-    set(ref(db, `loans/${loan.id}`), loan)
-      .then(() => addAuditLog('Create Loan', `Registered new loan for ${loan.borrowerName} (ID: ${loan.id})`, 'INFO'))
-      .catch(err => console.error(err));
+    addAuditLog('Create Loan', `Registered new loan for ${loan.borrowerName} (ID: ${loan.id})`, 'INFO');
   };
 
   const handleUpdateLoan = (updatedLoan: Loan) => {
     if (!db) {
         setLoans(prev => prev.map(l => l.id === updatedLoan.id ? updatedLoan : l));
-        addAuditLog('Update Loan', `Updated profile for ${updatedLoan.borrowerName}`, 'INFO');
-        return;
+    } else {
+        update(ref(db, `loans/${updatedLoan.id}`), updatedLoan);
     }
-    update(ref(db, `loans/${updatedLoan.id}`), updatedLoan)
-      .then(() => addAuditLog('Update Loan', `Updated profile for ${updatedLoan.borrowerName}`, 'INFO'));
+    addAuditLog('Update Loan', `Updated profile for ${updatedLoan.borrowerName}`, 'INFO');
   };
 
   const handleDeleteLoan = (id: string) => {
     if (!db) {
         setLoans(prev => prev.filter(l => l.id !== id));
-        addAuditLog('Delete Loan', `Deleted loan record ID: ${id}`, 'CRITICAL');
-        return;
+    } else {
+        remove(ref(db, `loans/${id}`));
     }
-    remove(ref(db, `loans/${id}`))
-      .then(() => addAuditLog('Delete Loan', `Deleted loan record ID: ${id}`, 'CRITICAL'));
+    addAuditLog('Delete Loan', `Deleted loan record ID: ${id}`, 'CRITICAL');
   };
 
   const handleTransaction = (loanId: string, category: TransactionCategory, direction: 'In' | 'Out', amount: number, notes: string) => {
@@ -273,11 +306,9 @@ const App: React.FC = () => {
         
         if (!db) {
             setLoans(prev => prev.map(l => l.id === loanId ? updatedLoan : l));
-            addAuditLog('Request Withdrawal', `Requested ${category} withdrawal of ${amount} for ${loan.borrowerName}`, 'WARNING');
-            return;
+        } else {
+            update(ref(db, `loans/${loanId}`), updatedLoan);
         }
-
-        update(ref(db, `loans/${loanId}`), updatedLoan);
         addAuditLog('Request Withdrawal', `Requested ${category} withdrawal of ${amount} for ${loan.borrowerName}`, 'WARNING');
         return;
     }
@@ -306,11 +337,9 @@ const App: React.FC = () => {
     
     if (!db) {
         setLoans(prev => prev.map(l => l.id === loanId ? updatedLoan : l));
-        addAuditLog('Post Transaction', `Posted ${direction} ${category} of ${amount} for ${loan.borrowerName}`, 'INFO');
-        return;
+    } else {
+        update(ref(db, `loans/${loanId}`), updatedLoan);
     }
-
-    update(ref(db, `loans/${loanId}`), updatedLoan);
     addAuditLog('Post Transaction', `Posted ${direction} ${category} of ${amount} for ${loan.borrowerName}`, 'INFO');
   };
 
@@ -340,11 +369,9 @@ const App: React.FC = () => {
       
       if (!db) {
           setLoans(prev => prev.map(l => l.id === loanId ? updatedLoan : l));
-          addAuditLog('Delete Transaction', `Reversed ${txn.category} transaction ${txnId} for ${loan.borrowerName}`, 'WARNING');
-          return;
+      } else {
+          update(ref(db, `loans/${loanId}`), updatedLoan);
       }
-
-      update(ref(db, `loans/${loanId}`), updatedLoan);
       addAuditLog('Delete Transaction', `Reversed ${txn.category} transaction ${txnId} for ${loan.borrowerName}`, 'WARNING');
   };
 
@@ -358,31 +385,21 @@ const App: React.FC = () => {
         ? { disbursementStatus: nextStatus, status: 'Current' }
         : { disbursementStatus: nextStatus };
 
-      const loan = loans.find(l => l.id === loanId);
-      if(loan) {
-          const updatedLoan = { ...loan, ...finalUpdates };
-          if (!db) {
-              setLoans(prev => prev.map(l => l.id === loanId ? updatedLoan as Loan : l));
-              addAuditLog('Approve Loan', `Advanced loan ${loanId} to ${nextStatus}`, 'INFO');
-              return;
-          }
+      if (!db) {
+          setLoans(prev => prev.map(l => l.id === loanId ? { ...l, ...finalUpdates } as Loan : l));
+      } else {
           update(ref(db, `loans/${loanId}`), finalUpdates);
-          addAuditLog('Approve Loan', `Advanced loan ${loanId} to ${nextStatus}`, 'INFO');
       }
+      addAuditLog('Approve Loan', `Advanced loan ${loanId} to ${nextStatus}`, 'INFO');
   };
 
   const handleRejectLoan = (loanId: string) => {
-      const loan = loans.find(l => l.id === loanId);
-      if(loan) {
-          const updatedLoan = { ...loan, disbursementStatus: ApprovalStatus.REJECTED };
-          if (!db) {
-              setLoans(prev => prev.map(l => l.id === loanId ? updatedLoan as Loan : l));
-              addAuditLog('Reject Loan', `Rejected loan application ${loanId}`, 'WARNING');
-              return;
-          }
+      if (!db) {
+          setLoans(prev => prev.map(l => l.id === loanId ? { ...l, disbursementStatus: ApprovalStatus.REJECTED } as Loan : l));
+      } else {
           update(ref(db, `loans/${loanId}`), { disbursementStatus: ApprovalStatus.REJECTED });
-          addAuditLog('Reject Loan', `Rejected loan application ${loanId}`, 'WARNING');
       }
+      addAuditLog('Reject Loan', `Rejected loan application ${loanId}`, 'WARNING');
   };
 
   const handleApproveTransaction = (loanId: string, reqId: string, currentStatus: ApprovalStatus) => {
@@ -424,11 +441,9 @@ const App: React.FC = () => {
               
               if (!db) {
                   setLoans(prev => prev.map(l => l.id === loanId ? updatedLoan : l));
-                  addAuditLog('Approve Withdrawal', `Final approval for ${req.category} withdrawal of ${req.amount}`, 'INFO');
-                  return;
+              } else {
+                  update(ref(db, `loans/${loanId}`), updatedLoan);
               }
-
-              update(ref(db, `loans/${loanId}`), updatedLoan);
               addAuditLog('Approve Withdrawal', `Final approval for ${req.category} withdrawal of ${req.amount}`, 'INFO');
               return;
           }
@@ -438,10 +453,9 @@ const App: React.FC = () => {
       const updatedRequests = (loan.pendingRequests || []).map(r => r.id === reqId ? { ...r, status: nextStatus } : r);
       if (!db) {
           setLoans(prev => prev.map(l => l.id === loanId ? { ...l, pendingRequests: updatedRequests } : l));
-          addAuditLog('Approve Step', `Advanced transaction request ${reqId} to ${nextStatus}`, 'INFO');
-          return;
+      } else {
+          update(ref(db, `loans/${loanId}`), { pendingRequests: updatedRequests });
       }
-      update(ref(db, `loans/${loanId}`), { pendingRequests: updatedRequests });
       addAuditLog('Approve Step', `Advanced transaction request ${reqId} to ${nextStatus}`, 'INFO');
   };
 
@@ -453,11 +467,9 @@ const App: React.FC = () => {
       
       if (!db) {
           setLoans(prev => prev.map(l => l.id === loanId ? { ...l, pendingRequests: updatedRequests } : l));
-          addAuditLog('Reject Withdrawal', `Rejected transaction request ${reqId}`, 'WARNING');
-          return;
+      } else {
+          update(ref(db, `loans/${loanId}`), { pendingRequests: updatedRequests });
       }
-
-      update(ref(db, `loans/${loanId}`), { pendingRequests: updatedRequests });
       addAuditLog('Reject Withdrawal', `Rejected transaction request ${reqId}`, 'WARNING');
   };
 
@@ -465,34 +477,42 @@ const App: React.FC = () => {
   const handleAddUser = (user: SystemUser) => {
       if (!db) {
           setUsers(prev => [...prev, user]);
-          addAuditLog('Create User', `Created user ${user.username}`, 'CRITICAL');
-          return;
+      } else {
+          set(ref(db, `system_users/${user.username}`), user);
       }
-      set(ref(db, `system_users/${user.username}`), user);
       addAuditLog('Create User', `Created user ${user.username}`, 'CRITICAL');
   };
 
   const handleDeleteUser = (username: string) => {
       if (!db) {
           setUsers(prev => prev.filter(u => u.username !== username));
-          addAuditLog('Delete User', `Deleted user ${username}`, 'CRITICAL');
-          return;
+      } else {
+          remove(ref(db, `system_users/${username}`));
       }
-      remove(ref(db, `system_users/${username}`));
       addAuditLog('Delete User', `Deleted user ${username}`, 'CRITICAL');
   };
 
   const handleUpdateUserRole = (username: string, role: UserRole) => {
-      const user = users.find(u => u.username === username);
-      if(user) {
-          if (!db) {
-              setUsers(prev => prev.map(u => u.username === username ? { ...u, role } : u));
-              addAuditLog('Update Role', `Changed role for ${username} to ${role}`, 'CRITICAL');
-              return;
-          }
+      if (!db) {
+          setUsers(prev => prev.map(u => u.username === username ? { ...u, role } : u));
+      } else {
           update(ref(db, `system_users/${username}`), { role });
-          addAuditLog('Update Role', `Changed role for ${username} to ${role}`, 'CRITICAL');
       }
+      addAuditLog('Update Role', `Changed role for ${username} to ${role}`, 'CRITICAL');
+  };
+
+  const handleChangeOwnPassword = (username: string, oldPass: string, newPass: string) => {
+      const user = users.find(u => u.username === username);
+      if (!user) return alert("User not found.");
+      if (user.password !== oldPass) return alert("Incorrect current password.");
+
+      if (!db) {
+          setUsers(prev => prev.map(u => u.username === username ? { ...u, password: newPass } : u));
+      } else {
+          update(ref(db, `system_users/${username}`), { password: newPass });
+      }
+      addAuditLog('Password Change', `User ${username} changed their own password`, 'INFO');
+      alert("Password updated successfully!");
   };
 
   // Chat
@@ -507,9 +527,9 @@ const App: React.FC = () => {
       };
       if (!db) {
           setMessages(prev => [...prev, msg]);
-          return;
+      } else {
+          push(ref(db, 'chat_messages'), msg);
       }
-      push(ref(db, 'chat_messages'), msg);
   };
 
   if (!currentUser) {
@@ -536,70 +556,143 @@ const App: React.FC = () => {
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.25em] mt-2">
                   AWAKE MICROCREDIT SERVICES
                 </p>
-                <div className={`mt-2 text-[9px] font-bold uppercase tracking-widest ${dbConnected ? 'text-emerald-500' : 'text-amber-500'}`}>
-                    {dbConnected ? '● Online Database' : '● Offline / Local Mode'}
+                
+                {/* Status Indicator */}
+                <div className={`mt-4 flex items-center justify-center gap-2 text-[9px] font-bold uppercase tracking-widest px-3 py-1 rounded-full border ${
+                    !isNetworkOnline 
+                    ? 'border-rose-500/50 bg-rose-500/10 text-rose-400' 
+                    : 'border-emerald-500/50 bg-emerald-500/10 text-emerald-400'
+                }`}>
+                    <div className={`w-2 h-2 rounded-full ${
+                        !isNetworkOnline ? 'bg-rose-500 animate-pulse' : 'bg-emerald-500'
+                    }`}></div>
+                    {!isNetworkOnline ? 'Offline / No Internet' : 'System Online'}
                 </div>
               </div>
               
-              {/* Login Form */}
-              <form onSubmit={handleLogin} className="p-10 space-y-6 relative z-10">
-                <div className="space-y-4">
-                  <div className="group">
-                    <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-1 tracking-widest group-focus-within:text-blue-400 transition-colors">Access ID</label>
-                    <div className="relative">
-                        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                            <span className="text-slate-500 group-focus-within:text-blue-400 transition-colors">👤</span>
+              {!isForgotPassword ? (
+                /* Login Form */
+                <form onSubmit={handleLogin} className="p-10 space-y-6 relative z-10 animate-fade-in">
+                    <div className="space-y-4">
+                    <div className="group">
+                        <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-1 tracking-widest group-focus-within:text-blue-400 transition-colors">Access ID</label>
+                        <div className="relative">
+                            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                <span className="text-slate-500 group-focus-within:text-blue-400 transition-colors">👤</span>
+                            </div>
+                            <input 
+                            type="text" 
+                            className="w-full pl-11 pr-4 py-4 bg-slate-950/50 border border-slate-700/50 rounded-xl font-bold text-slate-200 outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all placeholder-slate-600 shadow-inner"
+                            placeholder="Enter Username"
+                            value={loginUser}
+                            onChange={e => setLoginUser(e.target.value)}
+                            />
                         </div>
-                        <input 
-                          type="text" 
-                          className="w-full pl-11 pr-4 py-4 bg-slate-950/50 border border-slate-700/50 rounded-xl font-bold text-slate-200 outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all placeholder-slate-600 shadow-inner"
-                          placeholder="Enter Username"
-                          value={loginUser}
-                          onChange={e => setLoginUser(e.target.value)}
-                        />
                     </div>
-                  </div>
-                  
-                  <div className="group">
-                    <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-1 tracking-widest group-focus-within:text-blue-400 transition-colors">Password</label>
-                    <div className="relative">
-                        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                            <span className="text-slate-500 group-focus-within:text-blue-400 transition-colors">🔒</span>
+                    
+                    <div className="group">
+                        <div className="flex justify-between items-center mb-2">
+                            <label className="block text-[10px] font-black text-slate-400 uppercase ml-1 tracking-widest group-focus-within:text-blue-400 transition-colors">Password</label>
+                            <button 
+                                type="button" 
+                                onClick={() => setIsForgotPassword(true)}
+                                className="text-[10px] font-bold text-blue-500 hover:text-blue-400 uppercase transition-colors"
+                            >
+                                Forgot Password?
+                            </button>
                         </div>
-                        <input 
-                          type="password" 
-                          className="w-full pl-11 pr-4 py-4 bg-slate-950/50 border border-slate-700/50 rounded-xl font-bold text-slate-200 outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all placeholder-slate-600 shadow-inner"
-                          placeholder="••••••••"
-                          value={loginPass}
-                          onChange={e => setLoginPass(e.target.value)}
-                        />
+                        <div className="relative">
+                            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                <span className="text-slate-500 group-focus-within:text-blue-400 transition-colors">🔒</span>
+                            </div>
+                            <input 
+                            type="password" 
+                            className="w-full pl-11 pr-4 py-4 bg-slate-950/50 border border-slate-700/50 rounded-xl font-bold text-slate-200 outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all placeholder-slate-600 shadow-inner"
+                            placeholder="••••••••"
+                            value={loginPass}
+                            onChange={e => setLoginPass(e.target.value)}
+                            />
+                        </div>
                     </div>
-                  </div>
-                </div>
-                
-                {loginError && (
-                  <div className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl text-center backdrop-blur-sm animate-pulse">
-                    <p className="text-xs font-bold text-rose-400">{loginError}</p>
-                  </div>
-                )}
+                    </div>
+                    
+                    {loginError && (
+                    <div className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl text-center backdrop-blur-sm animate-pulse">
+                        <p className="text-xs font-bold text-rose-400">{loginError}</p>
+                    </div>
+                    )}
 
-                <button 
-                  type="submit" 
-                  className="w-full py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-black uppercase text-xs tracking-[0.15em] shadow-lg shadow-blue-600/30 hover:shadow-blue-600/50 hover:scale-[1.02] active:scale-[0.98] transition-all relative overflow-hidden group"
-                >
-                  <span className="relative z-10">{dbConnected ? 'Authenticate' : 'Enter Offline Mode'}</span>
-                  <div className="absolute inset-0 bg-gradient-to-r from-indigo-600 to-blue-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                </button>
-                
-                <div className="text-center pt-2">
-                   <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest opacity-60">
-                     Secure Gateway • Authorized Personnel Only
-                   </p>
-                   <p className="text-[9px] text-slate-600 font-bold mt-1">
-                     @2026 AWAKE Digital Transaction
-                   </p>
-                </div>
-              </form>
+                    <button 
+                    type="submit" 
+                    className="w-full py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-black uppercase text-xs tracking-[0.15em] shadow-lg shadow-blue-600/30 hover:shadow-blue-600/50 hover:scale-[1.02] active:scale-[0.98] transition-all relative overflow-hidden group"
+                    >
+                    <span className="relative z-10">{!isNetworkOnline ? 'Enter Offline Mode' : 'Authenticate Access'}</span>
+                    <div className="absolute inset-0 bg-gradient-to-r from-indigo-600 to-blue-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                    </button>
+                    
+                    <div className="text-center pt-2">
+                    <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest opacity-60">
+                        Secure Gateway • Authorized Personnel Only
+                    </p>
+                    <p className="text-[9px] text-slate-600 font-bold mt-1">
+                        @2026 AWAKE Digital Transaction
+                    </p>
+                    </div>
+                </form>
+              ) : (
+                /* Forgot Password Form */
+                <form onSubmit={handleForgotPassword} className="p-10 space-y-6 relative z-10 animate-fade-in">
+                    <div className="text-center mb-4">
+                        <h2 className="text-white font-black uppercase tracking-widest text-lg">Recover Account</h2>
+                        <p className="text-slate-400 text-xs font-bold mt-2">Enter your Access ID to receive a reset link via email.</p>
+                    </div>
+
+                    {!recoverySuccess ? (
+                        <>
+                            <div className="group">
+                                <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-1 tracking-widest group-focus-within:text-emerald-400 transition-colors">Access ID / Username</label>
+                                <div className="relative">
+                                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                        <span className="text-slate-500 group-focus-within:text-emerald-400 transition-colors">📧</span>
+                                    </div>
+                                    <input 
+                                        type="text" 
+                                        className="w-full pl-11 pr-4 py-4 bg-slate-950/50 border border-slate-700/50 rounded-xl font-bold text-slate-200 outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 transition-all placeholder-slate-600 shadow-inner"
+                                        placeholder="Enter your ID"
+                                        value={recoveryUser}
+                                        onChange={e => setRecoveryUser(e.target.value)}
+                                        autoFocus
+                                    />
+                                </div>
+                            </div>
+
+                            <button 
+                                type="submit" 
+                                disabled={!recoveryUser}
+                                className="w-full py-4 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl font-black uppercase text-xs tracking-[0.15em] shadow-lg shadow-emerald-600/30 hover:shadow-emerald-600/50 hover:scale-[1.02] active:scale-[0.98] transition-all relative overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                Send Reset Link
+                            </button>
+                        </>
+                    ) : (
+                        <div className="p-6 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl text-center">
+                            <span className="text-4xl">📨</span>
+                            <h3 className="text-emerald-400 font-black uppercase text-sm mt-3 tracking-widest">Link Sent</h3>
+                            <p className="text-slate-400 text-xs font-medium mt-2 leading-relaxed">
+                                If an account exists for <strong className="text-white">{recoveryUser}</strong>, a password reset link has been sent to the registered email address.
+                            </p>
+                        </div>
+                    )}
+
+                    <button 
+                        type="button"
+                        onClick={() => { setIsForgotPassword(false); setRecoverySuccess(false); setRecoveryUser(''); }}
+                        className="w-full py-3 text-slate-500 font-bold uppercase text-xs tracking-widest hover:text-white transition-colors"
+                    >
+                        ← Return to Login
+                    </button>
+                </form>
+              )}
             </div>
         </div>
       </div>
@@ -671,6 +764,7 @@ const App: React.FC = () => {
        {activeTab === 'audit_trail' && <AuditTrail logs={auditLogs} />}
        {activeTab === 'settings' && (
          <Settings 
+            currentUser={currentUser}
             users={users} 
             requests={requests} 
             loans={loans}
@@ -682,6 +776,7 @@ const App: React.FC = () => {
             onResetUserPassword={() => {}}
             onUpdateUserRole={handleUpdateUserRole}
             onDeleteLoan={handleDeleteLoan}
+            onChangeOwnPassword={handleChangeOwnPassword}
          />
        )}
        {activeTab === 'support' && <Support />}

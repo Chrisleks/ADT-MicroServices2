@@ -38,7 +38,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, role
     { id: 'groups', label: 'Groups', icon: '🏘️', roles: [UserRole.MASTER_ADMIN, UserRole.BDM, UserRole.HOB, UserRole.SFO, UserRole.FIELD_OFFICER, UserRole.ACCOUNTANT, UserRole.AUDITOR] },
     { id: 'reports', label: 'Reports', icon: '📈', roles: [UserRole.MASTER_ADMIN, UserRole.BDM, UserRole.HOB, UserRole.SFO, UserRole.ACCOUNTANT, UserRole.AUDITOR] },
     { id: 'audit_trail', label: 'Audit Trail', icon: '📜', roles: [UserRole.MASTER_ADMIN, UserRole.AUDITOR] },
-    { id: 'settings', label: 'Admin Settings', icon: '⚙️', roles: [UserRole.MASTER_ADMIN] },
+    { id: 'settings', label: 'Settings', icon: '⚙️', roles: [UserRole.MASTER_ADMIN, UserRole.BDM, UserRole.HOB, UserRole.SFO, UserRole.FIELD_OFFICER, UserRole.ACCOUNTANT, UserRole.AUDITOR, UserRole.ENCODER] }, // Open to all for Password Change
     { id: 'support', label: 'Help & Support', icon: '❓', roles: [UserRole.MASTER_ADMIN, UserRole.BDM, UserRole.HOB, UserRole.SFO, UserRole.FIELD_OFFICER, UserRole.ACCOUNTANT, UserRole.AUDITOR, UserRole.ENCODER] },
   ];
 
@@ -224,7 +224,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, role
                                       <div>
                                          <h5 className={`text-xs font-bold leading-tight ${!note.read ? 'text-slate-800' : 'text-slate-500'}`}>{note.title}</h5>
                                          <p className="text-[10px] text-slate-500 mt-1 leading-relaxed group-hover:text-blue-600 transition-colors">{note.message}</p>
-                                         <span className="text-[9px] text-slate-300 font-medium mt-2 block">{new Date(note.timestamp).toLocaleTimeString()}</span>
+                                         <span className="text-[9px] text-slate-300 font-medium mt-2 block">{note.timestamp ? new Date(note.timestamp).toLocaleTimeString() : ''}</span>
                                       </div>
                                    </div>
                                 </div>
@@ -241,7 +241,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, role
               {/* User Profile Snippet */}
               <div className="flex items-center gap-3 pl-6 border-l border-slate-200">
                  <div className="text-right hidden xl:block">
-                    <div className="text-xs font-black text-slate-800">Admin User</div>
+                    <div className="text-xs font-black text-slate-800">System User</div>
                     <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">{role}</div>
                  </div>
                  <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-blue-600 to-purple-600 flex items-center justify-center text-white font-black text-xs shadow-lg shadow-blue-500/20">

@@ -441,7 +441,7 @@ const CustomerProfiles: React.FC<CustomerProfilesProps> = ({ loans, onUpdateLoan
                     </div>
                     <div className="text-right">
                         <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Registration Date</div>
-                        <div className="text-xl font-black">{customer.dateOfRegistration}</div>
+                        <div className="text-xl font-black">{customer.dateOfRegistration ? new Date(customer.dateOfRegistration).toLocaleDateString() : 'N/A'}</div>
                         <div className="text-[10px] text-blue-400 font-bold mt-1">OFFICER: {customer.creditOfficer}</div>
                     </div>
                 </div>

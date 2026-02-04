@@ -15,8 +15,8 @@ export const INITIAL_LOANS: Loan[] = [
     loanDisbursementAmount: 50000,
     loanDisbursementDate: "2024-01-20",
     disbursementStatus: ApprovalStatus.APPROVED,
-    principal: 60000, // 20% interest
-    interestRate: 20,
+    principal: 59500, // 19% interest (50,000 * 1.19)
+    interestRate: 19,
     dueDate: "2024-05-20",
     dpd: 0,
     savingsBalance: 5000,
@@ -54,7 +54,7 @@ export const INITIAL_LOANS: Loan[] = [
     loanDisbursementAmount: 100000,
     loanDisbursementDate: "2024-02-05",
     disbursementStatus: ApprovalStatus.APPROVED,
-    principal: 120000,
+    principal: 120000, // Agric stays 20%
     interestRate: 20,
     dueDate: "2024-09-05",
     dpd: 0,
@@ -90,8 +90,8 @@ export const INITIAL_LOANS: Loan[] = [
     loanDisbursementAmount: 80000,
     loanDisbursementDate: "2023-11-15",
     disbursementStatus: ApprovalStatus.APPROVED,
-    principal: 96000,
-    interestRate: 20,
+    principal: 95200, // 19% interest (80,000 * 1.19)
+    interestRate: 19,
     dueDate: "2024-03-15",
     dpd: 14,
     savingsBalance: 8500,
@@ -106,7 +106,7 @@ export const INITIAL_LOANS: Loan[] = [
     activityLog: [
       { id: "LOG-2", date: "2024-02-20", officer: "CL", type: "Arrears Follow-up", notes: "Client travelled for family emergency. Promised to pay double next week.", flagged: true }
     ],
-    status: LoanStatus.WATCH, // 14 DPD
+    status: LoanStatus.WATCH,
     loanCycle: 3,
     nextOfKinName: "Peter Ojo",
     nextOfKinPhone: "08122223333",
@@ -131,8 +131,8 @@ export const INITIAL_LOANS: Loan[] = [
     loanDisbursementAmount: 200000,
     loanDisbursementDate: "",
     disbursementStatus: ApprovalStatus.PENDING_SFO,
-    principal: 240000,
-    interestRate: 20,
+    principal: 238000, // 19% interest (200,000 * 1.19)
+    interestRate: 19,
     dueDate: "",
     dpd: 0,
     savingsBalance: 20000,

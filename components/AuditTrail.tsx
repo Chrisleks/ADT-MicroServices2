@@ -90,8 +90,8 @@ const AuditTrail: React.FC<AuditTrailProps> = ({ logs }) => {
                             filteredLogs.map(log => (
                                 <tr key={log.id} className="hover:bg-slate-50 transition-colors">
                                     <td className="px-6 py-4 font-mono text-slate-500 print:text-black">
-                                        {new Date(log.timestamp).toLocaleTimeString()} <br/>
-                                        <span className="text-[9px] opacity-60 print:opacity-100">{new Date(log.timestamp).toLocaleDateString()}</span>
+                                        {log.timestamp ? new Date(log.timestamp).toLocaleTimeString() : '-'} <br/>
+                                        <span className="text-[9px] opacity-60 print:opacity-100">{log.timestamp ? new Date(log.timestamp).toLocaleDateString() : '-'}</span>
                                     </td>
                                     <td className="px-6 py-4 print:text-black">
                                         <div className="font-bold text-slate-700 capitalize">{log.actor}</div>

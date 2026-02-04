@@ -2,6 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { Loan, LoanStatus, LoanType, CreditOfficer } from '../types';
 import { analyzeRisk } from '../services/geminiService';
+import { generateAmortizationSchedule } from '../utils/amortization';
 
 interface LoanListProps {
   loans: Loan[];
@@ -62,72 +63,6 @@ const LoanList: React.FC<LoanListProps> = ({ loans, onDelete }) => {
     }
   };
 
-  // --- AMORTIZATION SCHEDULE GENERATOR ---
-  const generateSchedule = (loan: Loan) => {
-    const startDate = new Date(loan.loanDisbursementDate);
-    const schedule = [];
-    const totalPaid = loan.payments.filter(p => p.category === 'Loan Instalment' && p.direction === 'In').reduce((s, p) => s + p.amount, 0);
-    let remainingToPay = totalPaid;
-
-    if (loan.loanType === LoanType.BUSINESS) {
-        // 16 Weeks
-        const weeklyPayment = loan.principal / 16;
-        for (let i = 1; i <= 16; i++) {
-            const dueDate = new Date(startDate);
-            dueDate.setDate(startDate.getDate() + (i * 7));
-            
-            let status = 'Pending';
-            if (remainingToPay >= weeklyPayment - 1) {
-                status = 'Paid';
-                remainingToPay -= weeklyPayment;
-            } else if (remainingToPay > 0) {
-                status = 'Partial';
-                remainingToPay = 0;
-            } else if (new Date() > dueDate) {
-                status = 'Overdue';
-            }
-
-            schedule.push({
-                period: `Week ${i}`,
-                dueDate: dueDate.toISOString().split('T')[0],
-                amount: weeklyPayment,
-                status: status
-            });
-        }
-    } else {
-        // Agric: 7 Months Total
-        // 4 Months Grace Period
-        // 3 Monthly Installments at Month 5, 6, and 7
-        const monthlyPayment = loan.principal / 3;
-        for (let i = 1; i <= 3; i++) {
-            const dueDate = new Date(startDate);
-            // i=1 (Month 5), i=2 (Month 6), i=3 (Month 7)
-            // Month 0 (Disbursed) + 4 grace = End of Month 4.
-            // Payment 1 is at Month 5.
-            dueDate.setMonth(startDate.getMonth() + 4 + i); 
-            
-             let status = 'Pending';
-            if (remainingToPay >= monthlyPayment - 1) {
-                status = 'Paid';
-                remainingToPay -= monthlyPayment;
-            } else if (remainingToPay > 0) {
-                status = 'Partial';
-                remainingToPay = 0;
-            } else if (new Date() > dueDate) {
-                status = 'Overdue';
-            }
-
-            schedule.push({
-                period: `Month ${4+i}`,
-                dueDate: dueDate.toISOString().split('T')[0],
-                amount: monthlyPayment,
-                status: status
-            });
-        }
-    }
-    return schedule;
-  };
-
   const getStatusBadge = (status: LoanStatus) => {
     const styles = {
       [LoanStatus.CURRENT]: "bg-emerald-500 text-white border-emerald-600",
@@ -142,6 +77,8 @@ const LoanList: React.FC<LoanListProps> = ({ loans, onDelete }) => {
       </span>
     );
   };
+
+  const handlePrint = () => window.print();
 
   return (
     <div className="space-y-8 animate-fade-in pb-10">
@@ -187,7 +124,7 @@ const LoanList: React.FC<LoanListProps> = ({ loans, onDelete }) => {
         <SummaryMetric label="Collection Progress" value={metrics.totalRepaid} color="text-emerald-600" bg="bg-emerald-50" sub={`Total: ₦${metrics.totalPrincipal.toLocaleString()}`} />
         <SummaryMetric label="Total Savings" value={metrics.savings} color="text-indigo-600" bg="bg-indigo-50" />
         <div className="bg-rose-50 p-4 rounded-2xl border border-rose-100 flex flex-col justify-center">
-             <div className="text-[10px] font-black text-rose-400 uppercase tracking-widest">Risk Accounts</div>
+             <div className="text-[10px] font-black text-rose-400 uppercase tracking-widest Risk Accounts">Risk Accounts</div>
              <div className="flex items-end gap-2">
                 <span className="text-2xl font-black text-rose-600">{metrics.atRisk}</span>
                 <span className="text-xs font-bold text-rose-400 mb-1">of {filteredLoans.length}</span>
@@ -213,7 +150,7 @@ const LoanList: React.FC<LoanListProps> = ({ loans, onDelete }) => {
               {filteredLoans.map((loan) => {
                 const totalPaid = loan.payments.filter(p => p.category === 'Loan Instalment' && p.direction === 'In').reduce((sum, p) => sum + p.amount, 0);
                 const outstanding = loan.principal - totalPaid;
-                const progress = Math.min((totalPaid / loan.principal) * 100, 100);
+                const progress = loan.principal > 0 ? Math.min((totalPaid / loan.principal) * 100, 100) : 0;
                 
                 return (
                   <tr key={loan.id} className="group hover:bg-slate-50 transition-all duration-200">
@@ -234,7 +171,7 @@ const LoanList: React.FC<LoanListProps> = ({ loans, onDelete }) => {
                     <td className="px-6 py-4">
                       <div className="text-xs font-bold text-slate-700">{loan.loanType}</div>
                       <div className="text-[10px] font-medium text-slate-400 mt-1">
-                        Disbursed: <span className="text-slate-600">{new Date(loan.loanDisbursementDate).toLocaleDateString()}</span>
+                        Disbursed: <span className="text-slate-600">{loan.loanDisbursementDate ? new Date(loan.loanDisbursementDate).toLocaleDateString() : 'Pending'}</span>
                       </div>
                       <div className="text-[10px] font-medium text-slate-400">
                         Officer: <span className="text-blue-500 font-bold">{loan.creditOfficer}</span>
@@ -322,7 +259,6 @@ const LoanList: React.FC<LoanListProps> = ({ loans, onDelete }) => {
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setSelectedLoan(null)}></div>
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden relative z-10 animate-slide-up">
-            
             {/* Modal Header */}
             <div className="bg-slate-900 p-6 flex justify-between items-start">
               <div>
@@ -374,13 +310,12 @@ const LoanList: React.FC<LoanListProps> = ({ loans, onDelete }) => {
                          <div className="font-bold text-slate-800 leading-tight">{riskData.riskDriver}</div>
                       </div>
                       
-                      {/* Updated Status Box with Consistent Colors */}
                       <div className={`p-4 rounded-2xl border ${
                         selectedLoan.status === LoanStatus.CURRENT ? 'bg-emerald-50 border-emerald-100' :
                         selectedLoan.status === LoanStatus.WATCH ? 'bg-yellow-50 border-yellow-100' :
                         selectedLoan.status === LoanStatus.SUBSTANDARD ? 'bg-orange-50 border-orange-100' :
-                        selectedLoan.status === LoanStatus.DOUBTFUL ? 'bg-red-50 border-red-100' : // Red for consistency
-                        'bg-black border-slate-900' // Black for Loss
+                        selectedLoan.status === LoanStatus.DOUBTFUL ? 'bg-red-50 border-red-100' :
+                        'bg-black border-slate-900'
                       }`}>
                          <div className={`text-[10px] font-black uppercase tracking-widest mb-1 ${
                             selectedLoan.status === LoanStatus.LOSS ? 'text-slate-400' : 'opacity-60'
@@ -401,7 +336,6 @@ const LoanList: React.FC<LoanListProps> = ({ loans, onDelete }) => {
               )}
             </div>
             
-            {/* Modal Footer */}
             <div className="bg-slate-50 p-4 border-t border-slate-100 flex justify-end">
                 <button onClick={() => setSelectedLoan(null)} className="px-6 py-2 bg-slate-900 text-white rounded-xl font-bold text-sm hover:bg-slate-800 transition-colors">Close Report</button>
             </div>
@@ -423,11 +357,15 @@ const LoanList: React.FC<LoanListProps> = ({ loans, onDelete }) => {
                              {scheduleLoan.borrowerName} • {scheduleLoan.loanType}
                         </p>
                     </div>
-                    <button onClick={() => setScheduleLoan(null)} className="text-blue-200 hover:text-white text-2xl">×</button>
+                    <div className="flex gap-2">
+                        <button onClick={handlePrint} className="text-white/80 hover:text-white px-3 py-1 rounded bg-white/10 text-xs font-bold uppercase transition-colors">🖨️ Print</button>
+                        <button onClick={() => setScheduleLoan(null)} className="text-blue-200 hover:text-white text-2xl">×</button>
+                    </div>
                 </div>
 
                 {/* Content */}
                 <div className="p-0 overflow-auto flex-1">
+                    {scheduleLoan.loanDisbursementDate ? (
                     <table className="w-full text-left text-sm">
                         <thead className="bg-slate-50 text-[10px] font-black text-slate-400 uppercase tracking-widest sticky top-0 border-b border-slate-200">
                             <tr>
@@ -438,7 +376,7 @@ const LoanList: React.FC<LoanListProps> = ({ loans, onDelete }) => {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-50">
-                            {generateSchedule(scheduleLoan).map((row, idx) => (
+                            {generateAmortizationSchedule(scheduleLoan).map((row, idx) => (
                                 <tr key={idx} className="hover:bg-slate-50">
                                     <td className="px-6 py-3 font-bold text-slate-700">{row.period}</td>
                                     <td className="px-6 py-3 font-mono text-slate-500 text-xs">{new Date(row.dueDate).toLocaleDateString()}</td>
@@ -457,6 +395,11 @@ const LoanList: React.FC<LoanListProps> = ({ loans, onDelete }) => {
                             ))}
                         </tbody>
                     </table>
+                    ) : (
+                        <div className="p-8 text-center text-slate-400 font-bold text-sm">
+                            Schedule unavailable. Loan has not been disbursed.
+                        </div>
+                    )}
                 </div>
 
                 {/* Footer Summary */}
@@ -481,7 +424,6 @@ const LoanList: React.FC<LoanListProps> = ({ loans, onDelete }) => {
   );
 };
 
-// Subcomponent for Metric Cards
 const SummaryMetric = ({ label, value, color, bg, sub }: any) => (
   <div className={`${bg} p-4 rounded-2xl border border-opacity-50 flex flex-col justify-center`}>
     <div className="text-[10px] font-black opacity-60 uppercase tracking-widest mb-1">{label}</div>

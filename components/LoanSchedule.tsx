@@ -1,6 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { Loan, LoanType } from '../types';
+import { generateAmortizationSchedule } from '../utils/amortization';
 
 interface LoanScheduleProps {
   loans: Loan[];
@@ -21,78 +22,10 @@ const LoanSchedule: React.FC<LoanScheduleProps> = ({ loans }) => {
 
   const handlePrint = () => window.print();
 
-  // --- AMORTIZATION LOGIC ---
-  const generateSchedule = (loan: Loan) => {
-    const startDate = new Date(loan.loanDisbursementDate);
-    const schedule = [];
-    const totalPaid = loan.payments
-        .filter(p => p.category === 'Loan Instalment' && p.direction === 'In')
-        .reduce((s, p) => s + p.amount, 0);
-        
-    let remainingToPay = totalPaid;
-
-    if (loan.loanType === LoanType.BUSINESS) {
-        const weeklyPayment = loan.principal / 16;
-        for (let i = 1; i <= 16; i++) {
-            const dueDate = new Date(startDate);
-            dueDate.setDate(startDate.getDate() + (i * 7));
-            
-            let status = 'Pending';
-            if (remainingToPay >= weeklyPayment - 1) {
-                status = 'Paid';
-                remainingToPay -= weeklyPayment;
-            } else if (remainingToPay > 0) {
-                status = 'Partial';
-                remainingToPay = 0;
-            } else if (new Date() > dueDate) {
-                status = 'Overdue';
-            }
-
-            schedule.push({
-                period: `Week ${i}`,
-                dueDate: dueDate.toISOString().split('T')[0],
-                amount: weeklyPayment,
-                status: status,
-                loanId: loan.id,
-                borrowerName: loan.borrowerName,
-                group: loan.groupName
-            });
-        }
-    } else {
-        const monthlyPayment = loan.principal / 3;
-        for (let i = 1; i <= 3; i++) {
-            const dueDate = new Date(startDate);
-            dueDate.setMonth(startDate.getMonth() + 4 + i);
-            
-             let status = 'Pending';
-            if (remainingToPay >= monthlyPayment - 1) {
-                status = 'Paid';
-                remainingToPay -= monthlyPayment;
-            } else if (remainingToPay > 0) {
-                status = 'Partial';
-                remainingToPay = 0;
-            } else if (new Date() > dueDate) {
-                status = 'Overdue';
-            }
-
-            schedule.push({
-                period: `Month ${4+i}`,
-                dueDate: dueDate.toISOString().split('T')[0],
-                amount: monthlyPayment,
-                status: status,
-                loanId: loan.id,
-                borrowerName: loan.borrowerName,
-                group: loan.groupName
-            });
-        }
-    }
-    return schedule;
-  };
-
   // --- CALENDAR DATA GENERATION ---
   const calendarData = useMemo(() => {
-      // Flatten all schedules for all active loans
-      const allSchedules = loans.flatMap(l => generateSchedule(l));
+      // Flatten all schedules for all active loans using the utility
+      const allSchedules = loans.flatMap(l => generateAmortizationSchedule(l));
       
       const year = currentMonth.getFullYear();
       const month = currentMonth.getMonth();
@@ -221,6 +154,7 @@ const LoanSchedule: React.FC<LoanScheduleProps> = ({ loans }) => {
 
                 {/* Schedule Table */}
                 <div className="p-0">
+                    {selectedLoan.loanDisbursementDate ? (
                     <table className="w-full text-left">
                         <thead className="bg-slate-50 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-200 print:bg-slate-100 print:text-black">
                             <tr>
@@ -232,7 +166,7 @@ const LoanSchedule: React.FC<LoanScheduleProps> = ({ loans }) => {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 print:divide-slate-200">
-                            {generateSchedule(selectedLoan).map((row, idx) => (
+                            {generateAmortizationSchedule(selectedLoan).map((row, idx) => (
                                 <tr key={idx} className="hover:bg-slate-50 print:hover:bg-transparent">
                                     <td className="px-8 py-4 font-bold text-slate-700 print:text-black">{row.period}</td>
                                     <td className="px-8 py-4 font-mono text-sm text-slate-500 print:text-black">{new Date(row.dueDate).toLocaleDateString()}</td>
@@ -254,6 +188,11 @@ const LoanSchedule: React.FC<LoanScheduleProps> = ({ loans }) => {
                             ))}
                         </tbody>
                     </table>
+                    ) : (
+                        <div className="p-12 text-center text-slate-400 font-bold">
+                            Loan not yet disbursed. Schedule unavailable.
+                        </div>
+                    )}
                 </div>
 
                 {/* Footer */}

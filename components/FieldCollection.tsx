@@ -31,6 +31,9 @@ const FieldCollection: React.FC<FieldCollectionProps> = ({ loans, onTransaction,
   const officers = Array.from(new Set(loans.map(l => l.creditOfficer))).sort();
   const today = new Date().toISOString().split('T')[0];
 
+  // Note: Auto-print removed for Field Collection per request. 
+  // ADT Sheet, Cashbook, and Summary still auto-print.
+
   // Set default view based on role
   useEffect(() => {
     if (currentUser?.role === UserRole.FIELD_OFFICER) {

@@ -4,6 +4,7 @@ import { SystemUser, ResetRequest, UserRole, Loan, AuditLog } from '../types';
 import { sanitizeInput } from '../utils/security';
 
 interface SettingsProps {
+  currentUser: SystemUser;
   users: SystemUser[];
   requests: ResetRequest[];
   loans: Loan[];
@@ -15,12 +16,18 @@ interface SettingsProps {
   onResetUserPassword: (username: string, newPass: string) => void;
   onUpdateUserRole: (username: string, newRole: UserRole) => void;
   onDeleteLoan: (id: string) => void;
+  onChangeOwnPassword: (username: string, oldPass: string, newPass: string) => void;
 }
 
 const Settings: React.FC<SettingsProps> = ({ 
-  users, requests, loans, auditLogs, onAddUser, onDeleteUser, onApproveRequest, onRejectRequest, onResetUserPassword, onUpdateUserRole, onDeleteLoan
+  currentUser, users, requests, loans, auditLogs, onAddUser, onDeleteUser, onApproveRequest, onRejectRequest, onResetUserPassword, onUpdateUserRole, onDeleteLoan, onChangeOwnPassword
 }) => {
-  const [activeTab, setActiveTab] = useState<'users' | 'security' | 'audit' | 'config' | 'data'>('users');
+  const isAdmin = currentUser.role === UserRole.MASTER_ADMIN;
+  
+  // Default to 'my_security' for non-admins, 'users' for admin
+  const [activeTab, setActiveTab] = useState<'users' | 'security' | 'audit' | 'config' | 'data' | 'my_security'>(
+      isAdmin ? 'users' : 'my_security'
+  );
   
   // Add User Form State
   const [showAddModal, setShowAddModal] = useState(false);
@@ -36,6 +43,11 @@ const Settings: React.FC<SettingsProps> = ({
   // Data Management State
   const [loanSearch, setLoanSearch] = useState('');
   const [wipeCandidate, setWipeCandidate] = useState<{id: string, name: string} | null>(null);
+
+  // My Security State
+  const [oldPassword, setOldPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
 
   const filteredLoans = loans.filter(l => 
     l.borrowerName.toLowerCase().includes(loanSearch.toLowerCase()) ||
@@ -63,6 +75,22 @@ const Settings: React.FC<SettingsProps> = ({
       onUpdateUserRole(editingUser.username, editingUser.role);
       setEditingUser(null);
     }
+  };
+
+  const handleChangePasswordSubmit = (e: React.FormEvent) => {
+      e.preventDefault();
+      if (newPassword !== confirmPassword) {
+          alert("New passwords do not match.");
+          return;
+      }
+      if (newPassword.length < 4) {
+          alert("Password too weak.");
+          return;
+      }
+      onChangeOwnPassword(currentUser.username, oldPassword, newPassword);
+      setOldPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
   };
 
   const toggleMaintenance = () => {
@@ -124,14 +152,28 @@ const Settings: React.FC<SettingsProps> = ({
       {/* Header */}
       <div>
         <h2 className="text-3xl font-black text-slate-800 tracking-tight">System Settings</h2>
-        <p className="text-slate-500 font-medium">Master control panel for users, security, and auditing.</p>
+        <p className="text-slate-500 font-medium">Control panel for security, profile, and system configuration.</p>
       </div>
 
       {/* Settings Navigation */}
       <div className="flex border-b border-slate-200 gap-8 overflow-x-auto">
-        {[
+        {/* Available to All */}
+        <button
+            onClick={() => setActiveTab('my_security')}
+            className={`pb-4 px-2 text-xs font-black uppercase tracking-widest relative transition-colors whitespace-nowrap ${
+              activeTab === 'my_security' ? 'text-blue-600' : 'text-slate-400 hover:text-slate-600'
+            }`}
+        >
+            <span className="mr-2 text-base">🔐</span> My Security
+            {activeTab === 'my_security' && (
+              <div className="absolute bottom-0 left-0 right-0 h-1 bg-blue-600 rounded-t-full"></div>
+            )}
+        </button>
+
+        {/* Admin Only Tabs */}
+        {isAdmin && [
           { id: 'users', label: 'User Management', icon: '👥' },
-          { id: 'security', label: 'Security Center', icon: '🛡️', count: requests.filter(r => r.status === 'Pending').length },
+          { id: 'security', label: 'Reset Requests', icon: '🛡️', count: requests.filter(r => r.status === 'Pending').length },
           { id: 'audit', label: 'Audit Trail', icon: '📜' },
           { id: 'data', label: 'Data Management', icon: '🗄️' },
           { id: 'config', label: 'System Config', icon: '⚙️' },
@@ -155,8 +197,62 @@ const Settings: React.FC<SettingsProps> = ({
         ))}
       </div>
 
-      {/* CONTENT: User Management */}
-      {activeTab === 'users' && (
+      {/* CONTENT: My Security (Available to All) */}
+      {activeTab === 'my_security' && (
+          <div className="animate-slide-up max-w-2xl">
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-8">
+                  <h3 className="font-black text-slate-800 text-lg uppercase tracking-tight mb-2">Change Password</h3>
+                  <p className="text-slate-500 text-xs mb-6">Update your personal login credentials. It is recommended to change your default password immediately.</p>
+                  
+                  <form onSubmit={handleChangePasswordSubmit} className="space-y-5">
+                      <div>
+                          <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Current Password</label>
+                          <input 
+                            type="password" 
+                            className="w-full p-3 border border-slate-200 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50"
+                            placeholder="Enter current password"
+                            required
+                            value={oldPassword}
+                            onChange={e => setOldPassword(e.target.value)}
+                          />
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                          <div>
+                              <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">New Password</label>
+                              <input 
+                                type="password" 
+                                className="w-full p-3 border border-slate-200 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-500"
+                                placeholder="Min. 4 characters"
+                                required
+                                value={newPassword}
+                                onChange={e => setNewPassword(e.target.value)}
+                              />
+                          </div>
+                          <div>
+                              <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Confirm New Password</label>
+                              <input 
+                                type="password" 
+                                className="w-full p-3 border border-slate-200 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-500"
+                                placeholder="Repeat new password"
+                                required
+                                value={confirmPassword}
+                                onChange={e => setConfirmPassword(e.target.value)}
+                              />
+                          </div>
+                      </div>
+                      <div className="pt-4 flex items-center justify-between">
+                          <span className="text-[10px] text-slate-400 font-bold uppercase">* Updates take effect immediately</span>
+                          <button type="submit" className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-xl text-xs font-black uppercase tracking-widest shadow-lg transition-all active:scale-95">
+                              Update Password
+                          </button>
+                      </div>
+                  </form>
+              </div>
+          </div>
+      )}
+
+      {/* CONTENT: User Management (Admin Only) */}
+      {isAdmin && activeTab === 'users' && (
         <div className="animate-slide-up space-y-6">
           <div className="flex justify-between items-center bg-blue-50 p-6 rounded-2xl border border-blue-100">
             <div>
@@ -302,8 +398,8 @@ const Settings: React.FC<SettingsProps> = ({
         </div>
       )}
 
-      {/* CONTENT: Security */}
-      {activeTab === 'security' && (
+      {/* CONTENT: Reset Requests (Admin Only) */}
+      {isAdmin && activeTab === 'security' && (
         <div className="animate-slide-up space-y-6">
            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
               <div className="p-6 border-b border-slate-100 flex justify-between items-center">
@@ -377,8 +473,8 @@ const Settings: React.FC<SettingsProps> = ({
         </div>
       )}
 
-      {/* CONTENT: Audit Log */}
-      {activeTab === 'audit' && (
+      {/* CONTENT: Audit Log (Admin Only) */}
+      {isAdmin && activeTab === 'audit' && (
         <div className="animate-slide-up space-y-6">
             <div className="bg-slate-900 text-white p-6 rounded-2xl flex justify-between items-center shadow-lg">
                 <div>
@@ -412,7 +508,7 @@ const Settings: React.FC<SettingsProps> = ({
                                 auditLogs.map(log => (
                                     <tr key={log.id} className="hover:bg-slate-50 transition-colors">
                                         <td className="px-6 py-4 font-mono text-slate-500">
-                                            {new Date(log.timestamp).toLocaleTimeString()} <br/>
+                                            {new Date(log.timestamp).toLocaleTimeString() : '-'} <br/>
                                             <span className="text-[9px] opacity-60">{new Date(log.timestamp).toLocaleDateString()}</span>
                                         </td>
                                         <td className="px-6 py-4">
@@ -446,8 +542,8 @@ const Settings: React.FC<SettingsProps> = ({
         </div>
       )}
 
-      {/* CONTENT: Data Management */}
-      {activeTab === 'data' && (
+      {/* CONTENT: Data Management (Admin Only) */}
+      {isAdmin && activeTab === 'data' && (
         <div className="animate-slide-up space-y-6">
            <div className="bg-slate-900 p-6 rounded-2xl text-white shadow-lg flex justify-between items-center">
               <div>
@@ -538,8 +634,8 @@ const Settings: React.FC<SettingsProps> = ({
         </div>
       )}
 
-      {/* CONTENT: Config */}
-      {activeTab === 'config' && (
+      {/* CONTENT: Config (Admin Only) */}
+      {isAdmin && activeTab === 'config' && (
          <div className="animate-slide-up grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden">
                {maintenanceMode && (
