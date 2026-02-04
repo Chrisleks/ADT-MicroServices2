@@ -42,8 +42,11 @@ const App: React.FC = () => {
   const [loginPass, setLoginPass] = useState('');
   const [loginError, setLoginError] = useState('');
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [dbConnected, setDbConnected] = useState(true);
   
+  // Connection States
+  const [dbConnected, setDbConnected] = useState(true); // True if Firebase API Key is present
+  const [isNetworkOnline, setIsNetworkOnline] = useState(navigator.onLine); // True if Browser has Internet
+
   // Data State
   const [loans, setLoans] = useState<Loan[]>([]);
   const [users, setUsers] = useState<SystemUser[]>([]);
@@ -52,18 +55,50 @@ const App: React.FC = () => {
   const [requests] = useState<ResetRequest[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   
-  // --- FIREBASE REALTIME SYNC OR LOCAL FALLBACK ---
-  
+  // --- 1. NETWORK LISTENER ---
+  useEffect(() => {
+    const handleOnline = () => setIsNetworkOnline(true);
+    const handleOffline = () => setIsNetworkOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  // --- 2. DATA INITIALIZATION (Firebase vs Local) ---
   useEffect(() => {
     if (!db) {
         setDbConnected(false);
-        // Fallback: Load Initial Data locally if no DB connection
-        setLoans(INITIAL_LOANS);
-        setUsers(INITIAL_USERS);
+        console.log("App running in LOCAL/OFFLINE mode (No Firebase Config)");
+        
+        // Fallback: Load persistent data from LocalStorage
+        try {
+            const storedLoans = localStorage.getItem('adt_loans');
+            const storedUsers = localStorage.getItem('adt_users');
+            const storedLogs = localStorage.getItem('adt_logs');
+            const storedMsgs = localStorage.getItem('adt_messages');
+
+            if (storedLoans) setLoans(JSON.parse(storedLoans));
+            else setLoans(INITIAL_LOANS);
+
+            if (storedUsers) setUsers(JSON.parse(storedUsers));
+            else setUsers(INITIAL_USERS);
+
+            if (storedLogs) setAuditLogs(JSON.parse(storedLogs));
+            
+            if (storedMsgs) setMessages(JSON.parse(storedMsgs));
+
+        } catch (e) {
+            console.error("Error loading local data:", e);
+            setLoans(INITIAL_LOANS);
+            setUsers(INITIAL_USERS);
+        }
         return;
     }
 
-    // 1. Loans Listener
+    // Firebase Listeners
     const loansRef = ref(db, 'loans');
     const unsubLoans = onValue(loansRef, (snapshot) => {
         const data = snapshot.val();
@@ -75,10 +110,9 @@ const App: React.FC = () => {
         }
     }, (error) => {
         console.error("Firebase Read Error", error);
-        setDbConnected(false);
+        setDbConnected(false); // Switch to offline UI if auth/network fails
     });
 
-    // 2. Users Listener
     const usersRef = ref(db, 'system_users');
     const unsubUsers = onValue(usersRef, (snapshot) => {
         const data = snapshot.val();
@@ -102,7 +136,6 @@ const App: React.FC = () => {
         }
     });
 
-    // 3. Audit Logs Listener
     const logsRef = ref(db, 'audit_logs');
     const unsubLogs = onValue(logsRef, (snapshot) => {
         const data = snapshot.val();
@@ -110,7 +143,6 @@ const App: React.FC = () => {
         else setAuditLogs([]);
     });
 
-    // 4. Chat Messages Listener
     const chatRef = ref(db, 'chat_messages');
     const unsubChat = onValue(chatRef, (snapshot) => {
         const data = snapshot.val();
@@ -126,8 +158,26 @@ const App: React.FC = () => {
     };
   }, []);
 
+  // --- 3. LOCAL STORAGE PERSISTENCE (Only if !db) ---
+  useEffect(() => {
+    if (!db) localStorage.setItem('adt_loans', JSON.stringify(loans));
+  }, [loans]);
 
-  // Handlers
+  useEffect(() => {
+    if (!db) localStorage.setItem('adt_users', JSON.stringify(users));
+  }, [users]);
+
+  useEffect(() => {
+    if (!db) localStorage.setItem('adt_logs', JSON.stringify(auditLogs));
+  }, [auditLogs]);
+
+  useEffect(() => {
+    if (!db) localStorage.setItem('adt_messages', JSON.stringify(messages));
+  }, [messages]);
+
+
+  // --- HANDLERS ---
+
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     const user = users.find(u => u.username.toLowerCase() === loginUser.toLowerCase() && u.password === loginPass);
@@ -486,8 +536,8 @@ const App: React.FC = () => {
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.25em] mt-2">
                   AWAKE MICROCREDIT SERVICES
                 </p>
-                <div className={`mt-2 text-[9px] font-bold uppercase tracking-widest ${dbConnected ? 'text-emerald-500' : 'text-rose-500'}`}>
-                    {dbConnected ? '● Online Database' : '● Demo / Local Mode'}
+                <div className={`mt-2 text-[9px] font-bold uppercase tracking-widest ${dbConnected ? 'text-emerald-500' : 'text-amber-500'}`}>
+                    {dbConnected ? '● Online Database' : '● Offline / Local Mode'}
                 </div>
               </div>
               
@@ -537,7 +587,7 @@ const App: React.FC = () => {
                   type="submit" 
                   className="w-full py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-black uppercase text-xs tracking-[0.15em] shadow-lg shadow-blue-600/30 hover:shadow-blue-600/50 hover:scale-[1.02] active:scale-[0.98] transition-all relative overflow-hidden group"
                 >
-                  <span className="relative z-10">{dbConnected ? 'Authenticate' : 'Enter Demo Mode'}</span>
+                  <span className="relative z-10">{dbConnected ? 'Authenticate' : 'Enter Offline Mode'}</span>
                   <div className="absolute inset-0 bg-gradient-to-r from-indigo-600 to-blue-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                 </button>
                 
@@ -579,7 +629,7 @@ const App: React.FC = () => {
            loans={loans} 
            onTransaction={handleTransaction} 
            currentUser={currentUser}
-           isOnline={dbConnected}
+           isOnline={dbConnected && isNetworkOnline}
            onManualSync={() => {}}
          />
        )}
