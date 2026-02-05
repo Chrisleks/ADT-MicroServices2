@@ -535,165 +535,178 @@ const App: React.FC = () => {
 
   if (!currentUser) {
     return (
-      <div className="min-h-screen w-full flex items-center justify-center relative overflow-hidden bg-[#0f172a]">
-        {/* 3D Background Elements */}
-        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-purple-600/30 blur-[120px] animate-pulse-slow"></div>
-        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-blue-600/30 blur-[120px] animate-pulse-slow delay-1000"></div>
-        <div className="absolute top-[20%] right-[20%] w-[20%] h-[20%] rounded-full bg-emerald-500/20 blur-[100px] animate-float"></div>
+      <div className="min-h-screen w-full flex items-center justify-center relative overflow-hidden bg-slate-950 selection:bg-indigo-500 selection:text-white">
+        
+        {/* Professional Background Effects */}
+        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-[0.03]"></div>
+        <div className="absolute top-0 left-0 w-full h-full overflow-hidden z-0">
+            <div className="absolute top-[-10%] left-[-10%] w-[50vw] h-[50vw] rounded-full bg-indigo-600/20 blur-[120px] animate-pulse-slow mix-blend-screen"></div>
+            <div className="absolute bottom-[-10%] right-[-10%] w-[50vw] h-[50vw] rounded-full bg-teal-600/10 blur-[120px] animate-pulse-slow delay-700 mix-blend-screen"></div>
+            <div className="absolute top-[40%] left-[40%] w-[20vw] h-[20vw] rounded-full bg-rose-500/10 blur-[100px] animate-float"></div>
+        </div>
 
-        {/* Glass Card */}
-        <div className="relative z-10 w-full max-w-md p-4">
-            <div className="absolute inset-0 bg-gradient-to-r from-blue-500/30 to-purple-500/30 rounded-3xl blur-lg transform scale-105 opacity-50"></div>
-            <div className="bg-slate-900/60 backdrop-blur-2xl border border-white/10 rounded-3xl shadow-2xl overflow-hidden relative">
-              
-              {/* Card Header */}
-              <div className="p-10 pb-0 text-center relative">
-                <div className="w-32 h-32 mx-auto mb-4 relative z-10 filter drop-shadow-[0_0_15px_rgba(59,130,246,0.5)]">
-                   <Logo />
-                </div>
-                <h1 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-400 tracking-tight uppercase drop-shadow-sm">
-                  TEKAN PEACE DESK
-                </h1>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.25em] mt-2">
-                  AWAKE MICROCREDIT SERVICES
-                </p>
+        {/* Login Container */}
+        <div className="relative z-10 w-full max-w-md px-6 animate-fade-in">
+            <div className="relative group">
+                {/* Glow Effect behind card */}
+                <div className="absolute -inset-1 bg-gradient-to-r from-indigo-500 to-teal-500 rounded-3xl blur opacity-20 group-hover:opacity-40 transition duration-1000 group-hover:duration-200"></div>
                 
-                {/* Status Indicator */}
-                <div className={`mt-4 flex items-center justify-center gap-2 text-[9px] font-bold uppercase tracking-widest px-3 py-1 rounded-full border ${
-                    !isNetworkOnline 
-                    ? 'border-rose-500/50 bg-rose-500/10 text-rose-400' 
-                    : 'border-emerald-500/50 bg-emerald-500/10 text-emerald-400'
-                }`}>
-                    <div className={`w-2 h-2 rounded-full ${
-                        !isNetworkOnline ? 'bg-rose-500 animate-pulse' : 'bg-emerald-500'
-                    }`}></div>
-                    {!isNetworkOnline ? 'Offline / No Internet' : 'System Online'}
-                </div>
-              </div>
-              
-              {!isForgotPassword ? (
-                /* Login Form */
-                <form onSubmit={handleLogin} className="p-10 space-y-6 relative z-10 animate-fade-in">
-                    <div className="space-y-4">
-                    <div className="group">
-                        <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-1 tracking-widest group-focus-within:text-blue-400 transition-colors">Access ID</label>
-                        <div className="relative">
-                            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                                <span className="text-slate-500 group-focus-within:text-blue-400 transition-colors">👤</span>
-                            </div>
-                            <input 
-                            type="text" 
-                            className="w-full pl-11 pr-4 py-4 bg-slate-950/50 border border-slate-700/50 rounded-xl font-bold text-slate-200 outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all placeholder-slate-600 shadow-inner"
-                            placeholder="Enter Username"
-                            value={loginUser}
-                            onChange={e => setLoginUser(e.target.value)}
-                            />
+                <div className="relative bg-slate-900/80 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
+                    
+                    {/* Header Brand */}
+                    <div className="pt-12 pb-8 px-10 text-center border-b border-white/5 bg-white/5">
+                        <div className="w-24 h-24 mx-auto mb-6 relative group-hover:scale-105 transition-transform duration-500">
+                           <div className="absolute inset-0 bg-indigo-500 blur-2xl opacity-20 rounded-full"></div>
+                           <Logo />
                         </div>
+                        <h1 className="text-2xl font-black text-white tracking-tight uppercase letter-spacing-wide">
+                          TEKAN Peace Desk
+                        </h1>
+                        <p className="text-[10px] font-bold text-indigo-300 uppercase tracking-[0.3em] mt-2 opacity-80">
+                          AWAKE DIGITAL TRANSACTION
+                        </p>
                     </div>
                     
-                    <div className="group">
-                        <div className="flex justify-between items-center mb-2">
-                            <label className="block text-[10px] font-black text-slate-400 uppercase ml-1 tracking-widest group-focus-within:text-blue-400 transition-colors">Password</label>
-                            <button 
-                                type="button" 
-                                onClick={() => setIsForgotPassword(true)}
-                                className="text-[10px] font-bold text-blue-500 hover:text-blue-400 uppercase transition-colors"
-                            >
-                                Forgot Password?
-                            </button>
-                        </div>
-                        <div className="relative">
-                            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                                <span className="text-slate-500 group-focus-within:text-blue-400 transition-colors">🔒</span>
-                            </div>
-                            <input 
-                            type="password" 
-                            className="w-full pl-11 pr-4 py-4 bg-slate-950/50 border border-slate-700/50 rounded-xl font-bold text-slate-200 outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all placeholder-slate-600 shadow-inner"
-                            placeholder="••••••••"
-                            value={loginPass}
-                            onChange={e => setLoginPass(e.target.value)}
-                            />
-                        </div>
-                    </div>
-                    </div>
-                    
-                    {loginError && (
-                    <div className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl text-center backdrop-blur-sm animate-pulse">
-                        <p className="text-xs font-bold text-rose-400">{loginError}</p>
-                    </div>
-                    )}
-
-                    <button 
-                    type="submit" 
-                    className="w-full py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-black uppercase text-xs tracking-[0.15em] shadow-lg shadow-blue-600/30 hover:shadow-blue-600/50 hover:scale-[1.02] active:scale-[0.98] transition-all relative overflow-hidden group"
-                    >
-                    <span className="relative z-10">{!isNetworkOnline ? 'Enter Offline Mode' : 'Authenticate Access'}</span>
-                    <div className="absolute inset-0 bg-gradient-to-r from-indigo-600 to-blue-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                    </button>
-                    
-                    <div className="text-center pt-2">
-                    <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest opacity-60">
-                        Secure Gateway • Authorized Personnel Only
-                    </p>
-                    <p className="text-[9px] text-slate-600 font-bold mt-1">
-                        @2026 AWAKE Digital Transaction
-                    </p>
-                    </div>
-                </form>
-              ) : (
-                /* Forgot Password Form */
-                <form onSubmit={handleForgotPassword} className="p-10 space-y-6 relative z-10 animate-fade-in">
-                    <div className="text-center mb-4">
-                        <h2 className="text-white font-black uppercase tracking-widest text-lg">Recover Account</h2>
-                        <p className="text-slate-400 text-xs font-bold mt-2">Enter your Access ID to receive a reset link via email.</p>
-                    </div>
-
-                    {!recoverySuccess ? (
-                        <>
-                            <div className="group">
-                                <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-1 tracking-widest group-focus-within:text-emerald-400 transition-colors">Access ID / Username</label>
-                                <div className="relative">
-                                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                                        <span className="text-slate-500 group-focus-within:text-emerald-400 transition-colors">📧</span>
+                    <div className="p-10 bg-gradient-to-b from-transparent to-black/20">
+                        {!isForgotPassword ? (
+                            <form onSubmit={handleLogin} className="space-y-6">
+                                <div className="space-y-4">
+                                    <div className="group relative">
+                                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 block ml-1 group-focus-within:text-indigo-400 transition-colors">Access ID</label>
+                                        <div className="relative">
+                                            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                                <svg className="h-4 w-4 text-slate-500 group-focus-within:text-indigo-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                                                </svg>
+                                            </div>
+                                            <input 
+                                                type="text" 
+                                                className="block w-full pl-11 pr-4 py-3.5 bg-slate-950/50 border border-slate-700/50 rounded-xl text-sm font-bold text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500/50 transition-all shadow-inner"
+                                                placeholder="Username"
+                                                value={loginUser}
+                                                onChange={e => setLoginUser(e.target.value)}
+                                            />
+                                        </div>
                                     </div>
-                                    <input 
-                                        type="text" 
-                                        className="w-full pl-11 pr-4 py-4 bg-slate-950/50 border border-slate-700/50 rounded-xl font-bold text-slate-200 outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 transition-all placeholder-slate-600 shadow-inner"
-                                        placeholder="Enter your ID"
-                                        value={recoveryUser}
-                                        onChange={e => setRecoveryUser(e.target.value)}
-                                        autoFocus
-                                    />
+                                    
+                                    <div className="group relative">
+                                        <div className="flex justify-between items-center mb-1.5 ml-1">
+                                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest group-focus-within:text-indigo-400 transition-colors">Password</label>
+                                        </div>
+                                        <div className="relative">
+                                            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                                <svg className="h-4 w-4 text-slate-500 group-focus-within:text-indigo-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                                                </svg>
+                                            </div>
+                                            <input 
+                                                type="password" 
+                                                className="block w-full pl-11 pr-4 py-3.5 bg-slate-950/50 border border-slate-700/50 rounded-xl text-sm font-bold text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500/50 transition-all shadow-inner"
+                                                placeholder="••••••••"
+                                                value={loginPass}
+                                                onChange={e => setLoginPass(e.target.value)}
+                                            />
+                                        </div>
+                                    </div>
                                 </div>
-                            </div>
 
-                            <button 
-                                type="submit" 
-                                disabled={!recoveryUser}
-                                className="w-full py-4 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl font-black uppercase text-xs tracking-[0.15em] shadow-lg shadow-emerald-600/30 hover:shadow-emerald-600/50 hover:scale-[1.02] active:scale-[0.98] transition-all relative overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                Send Reset Link
-                            </button>
-                        </>
-                    ) : (
-                        <div className="p-6 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl text-center">
-                            <span className="text-4xl">📨</span>
-                            <h3 className="text-emerald-400 font-black uppercase text-sm mt-3 tracking-widest">Link Sent</h3>
-                            <p className="text-slate-400 text-xs font-medium mt-2 leading-relaxed">
-                                If an account exists for <strong className="text-white">{recoveryUser}</strong>, a password reset link has been sent to the registered email address.
-                            </p>
-                        </div>
-                    )}
+                                {loginError && (
+                                    <div className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/20 text-center animate-shake">
+                                        <p className="text-xs font-bold text-rose-400">{loginError}</p>
+                                    </div>
+                                )}
 
-                    <button 
-                        type="button"
-                        onClick={() => { setIsForgotPassword(false); setRecoverySuccess(false); setRecoveryUser(''); }}
-                        className="w-full py-3 text-slate-500 font-bold uppercase text-xs tracking-widest hover:text-white transition-colors"
-                    >
-                        ← Return to Login
-                    </button>
-                </form>
-              )}
+                                <div className="space-y-4 pt-2">
+                                    <button 
+                                        type="submit" 
+                                        className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold uppercase text-xs tracking-widest shadow-lg shadow-indigo-900/30 transition-all transform active:scale-[0.98] flex justify-center items-center gap-2 group/btn"
+                                    >
+                                        <span>Authenticate</span>
+                                        <svg className="w-4 h-4 group-hover/btn:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                                        </svg>
+                                    </button>
+                                    
+                                    <div className="flex justify-between items-center px-1">
+                                        <button 
+                                            type="button" 
+                                            onClick={() => setIsForgotPassword(true)}
+                                            className="text-[10px] font-bold text-slate-500 hover:text-indigo-400 transition-colors uppercase tracking-wide"
+                                        >
+                                            Forgot Password?
+                                        </button>
+                                        <span className="text-[10px] font-bold text-slate-600">v2.4.0</span>
+                                    </div>
+                                </div>
+                            </form>
+                        ) : (
+                            <form onSubmit={handleForgotPassword} className="space-y-6 animate-fade-in">
+                                <div className="text-center mb-6">
+                                    <div className="w-12 h-12 bg-indigo-500/20 rounded-full flex items-center justify-center mx-auto mb-3 text-indigo-400 text-xl">
+                                        🔐
+                                    </div>
+                                    <h3 className="text-white font-bold text-sm uppercase tracking-wider">Account Recovery</h3>
+                                    <p className="text-slate-400 text-xs mt-2 leading-relaxed">Enter your registered Access ID to receive reset instructions via secure channel.</p>
+                                </div>
+
+                                {!recoverySuccess ? (
+                                    <>
+                                        <div className="group relative">
+                                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 block ml-1 group-focus-within:text-emerald-400 transition-colors">Access ID</label>
+                                            <div className="relative">
+                                                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                                    <svg className="h-4 w-4 text-slate-500 group-focus-within:text-emerald-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                                                    </svg>
+                                                </div>
+                                                <input 
+                                                    type="text" 
+                                                    className="block w-full pl-11 pr-4 py-3.5 bg-slate-950/50 border border-slate-700/50 rounded-xl text-sm font-bold text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 transition-all shadow-inner"
+                                                    placeholder="Enter ID"
+                                                    value={recoveryUser}
+                                                    onChange={e => setRecoveryUser(e.target.value)}
+                                                    autoFocus
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <button 
+                                            type="submit" 
+                                            disabled={!recoveryUser}
+                                            className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl font-bold uppercase text-xs tracking-widest shadow-lg shadow-emerald-900/30 transition-all transform active:scale-[0.98]"
+                                        >
+                                            Initiate Reset
+                                        </button>
+                                    </>
+                                ) : (
+                                    <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-center">
+                                        <p className="text-emerald-400 text-xs font-bold leading-relaxed">
+                                            If the ID <span className="text-white underline">{recoveryUser}</span> exists, a secure link has been dispatched to the registered contact.
+                                        </p>
+                                    </div>
+                                )}
+
+                                <button 
+                                    type="button"
+                                    onClick={() => { setIsForgotPassword(false); setRecoverySuccess(false); setRecoveryUser(''); }}
+                                    className="w-full py-3 text-slate-500 hover:text-white font-bold uppercase text-[10px] tracking-widest transition-colors flex items-center justify-center gap-2"
+                                >
+                                    <span>←</span> Return to Login
+                                </button>
+                            </form>
+                        )}
+                    </div>
+                    
+                    {/* Footer */}
+                    <div className="bg-black/30 p-4 text-center border-t border-white/5">
+                        <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">
+                            Authorized Personnel Only
+                        </p>
+                        <p className="text-[8px] text-slate-600 font-bold uppercase tracking-widest mt-1">
+                            © 2026 Copyright Design by Chrisleks
+                        </p>
+                    </div>
+                </div>
             </div>
         </div>
       </div>
