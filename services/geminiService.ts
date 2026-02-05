@@ -1,4 +1,3 @@
-
 import { GoogleGenAI } from "@google/genai";
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -96,5 +95,50 @@ export const askPortfolioAssistant = async (query: string, loans: any[]) => {
   } catch (e) {
     console.error("AI Assistant Error", e);
     return "I'm having trouble analyzing the portfolio right now. Please ensure your API key is valid and you are online.";
+  }
+};
+
+export const askMathTutor = async (history: {role: string, text: string}[], currentMessage: string, imageBase64?: string) => {
+  // Format history for context
+  const historyContext = history.map(msg => `${msg.role === 'user' ? 'Student' : 'Tutor'}: ${msg.text}`).join('\n');
+  
+  const systemInstruction = "You are a Socratic Math Tutor. Help the student solve the problem step-by-step. Do not give the answer immediately. Ask guiding questions to help them understand.";
+  
+  const fullPrompt = `${systemInstruction}\n\nConversation History:\n${historyContext}\n\nStudent: ${currentMessage}\nTutor:`;
+
+  try {
+    let response;
+    
+    if (imageBase64) {
+        // Use Gemini 2.5 Flash Image for multimodal requests
+        response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash-image',
+            contents: {
+                parts: [
+                    {
+                        inlineData: {
+                            mimeType: 'image/jpeg',
+                            data: imageBase64
+                        }
+                    },
+                    { text: fullPrompt }
+                ]
+            }
+        });
+    } else {
+        // Use Gemini 3 Flash Preview for text reasoning with thinking budget
+        response = await ai.models.generateContent({
+            model: 'gemini-3-flash-preview',
+            contents: fullPrompt,
+            config: {
+                thinkingConfig: { thinkingBudget: 1024 }
+            }
+        });
+    }
+
+    return response.text;
+  } catch (e) {
+    console.error("AI Tutor Error", e);
+    return "I'm having trouble connecting to the knowledge base right now. Please check your connection.";
   }
 };

@@ -554,7 +554,7 @@ const App: React.FC = () => {
                 <div className="relative bg-slate-900/80 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
                     
                     {/* Header Brand */}
-                    <div className="pt-12 pb-8 px-10 text-center border-b border-white/5 bg-white/5">
+                    <div className="pt-12 pb-8 px-10 text-center border-b border-white/5 bg-white/5 relative">
                         <div className="w-24 h-24 mx-auto mb-6 relative group-hover:scale-105 transition-transform duration-500">
                            <div className="absolute inset-0 bg-indigo-500 blur-2xl opacity-20 rounded-full"></div>
                            <Logo />
@@ -701,9 +701,6 @@ const App: React.FC = () => {
                     <div className="bg-black/30 p-4 text-center border-t border-white/5">
                         <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">
                             Authorized Personnel Only
-                        </p>
-                        <p className="text-[8px] text-slate-600 font-bold uppercase tracking-widest mt-1">
-                            © 2026 Copyright Design by Chrisleks
                         </p>
                     </div>
                 </div>
