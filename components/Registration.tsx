@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { LoanType, Loan, LoanStatus, ApprovalStatus } from '../types';
 import { sanitizeInput } from '../utils/security';
@@ -10,6 +11,20 @@ interface RegistrationProps {
 }
 
 const Registration: React.FC<RegistrationProps> = ({ loans, onAddLoan, existingGroups, existingOfficers }) => {
+  // Check online status
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+        window.removeEventListener('online', handleOnline);
+        window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
   const calculateNextId = () => {
     const ids = loans.map(l => parseInt(l.id)).filter(n => !isNaN(n));
     const maxId = ids.length > 0 ? Math.max(...ids) : 1000;
@@ -36,7 +51,8 @@ const Registration: React.FC<RegistrationProps> = ({ loans, onAddLoan, existingG
     // Migration Fields
     existingLoanBalance: '',
     existingSavings: '',
-    existingAdashe: ''
+    existingAdashe: '',
+    migrationDate: '' // Original Disbursement Date
   });
 
   const [newGroupName, setNewGroupName] = useState('');
@@ -71,6 +87,36 @@ const Registration: React.FC<RegistrationProps> = ({ loans, onAddLoan, existingG
       reader.readAsDataURL(file);
     }
   };
+
+  // --- Helper: Calculate Remaining Time ---
+  const calculateRemainingTime = () => {
+    if (!formData.migrationDate) return null;
+
+    const start = new Date(formData.migrationDate);
+    const now = new Date();
+    const diffTime = now.getTime() - start.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (formData.loanType === LoanType.BUSINESS) {
+        // Business: 16 Weeks
+        const totalWeeks = 16;
+        const weeksPassed = Math.floor(diffDays / 7);
+        const remaining = totalWeeks - weeksPassed;
+        
+        if (remaining < 0) return { text: `Overdue by ${Math.abs(remaining)} weeks`, status: 'overdue' };
+        return { text: `${remaining} Weeks Remaining`, status: 'active' };
+    } else {
+        // Agric: 7 Months (approx 30 days per month)
+        const totalMonths = 7;
+        const monthsPassed = Math.floor(diffDays / 30);
+        const remaining = totalMonths - monthsPassed;
+
+        if (remaining < 0) return { text: `Overdue by ${Math.abs(remaining)} months`, status: 'overdue' };
+        return { text: `${remaining} Months Remaining`, status: 'active' };
+    }
+  };
+
+  const remainingTime = calculateRemainingTime();
 
   // --- Camera Functions ---
   const startCamera = async (type: 'passport' | 'loanForm') => {
@@ -150,6 +196,9 @@ const Registration: React.FC<RegistrationProps> = ({ loans, onAddLoan, existingG
         ? existingLoanBal 
         : disbursementAmt * (formData.loanType.includes('19%') ? 1.19 : 1.20);
 
+    // Use Migration Date if provided, else Today
+    const finalDisbursementDate = formData.migrationDate || new Date().toISOString().split('T')[0];
+
     const newLoan: Loan = {
       id: sanitizeInput(formData.id),
       dateOfRegistration: new Date().toISOString().split('T')[0],
@@ -161,11 +210,11 @@ const Registration: React.FC<RegistrationProps> = ({ loans, onAddLoan, existingG
       creditOfficer: finalOfficer,
       loanType: formData.loanType,
       loanDisbursementAmount: disbursementAmt,
-      loanDisbursementDate: new Date().toISOString().split('T')[0],
+      loanDisbursementDate: finalDisbursementDate,
       disbursementStatus: ApprovalStatus.PENDING_BDM, 
       principal: finalPrincipal,
       interestRate: formData.loanType.includes('19%') ? 19 : 20,
-      dueDate: '',
+      dueDate: '', // Would be calculated based on duration if needed
       dpd: 0,
       savingsBalance: parseFloat(formData.existingSavings) || 0,
       adasheBalance: parseFloat(formData.existingAdashe) || 0,
@@ -186,7 +235,12 @@ const Registration: React.FC<RegistrationProps> = ({ loans, onAddLoan, existingG
     };
 
     onAddLoan(newLoan);
-    alert("Customer Registered & Submitted for Approval (Flow: BDM -> SFO -> HOB)");
+    
+    if (isOnline) {
+       alert("Customer Registered & Submitted for Approval (Flow: BDM -> SFO -> HOB)");
+    } else {
+       alert("⚠️ Offline Mode: Registration saved to Drafts. Will sync automatically when network returns.");
+    }
     
     // Reset Form
     setFormData({
@@ -196,7 +250,8 @@ const Registration: React.FC<RegistrationProps> = ({ loans, onAddLoan, existingG
       loanType: LoanType.BUSINESS, disbursement: '',
       nextOfKinName: '', nextOfKinPhone: '',
       guarantorName: '', guarantorPhone: '', guarantorAddress: '',
-      existingLoanBalance: '', existingSavings: '', existingAdashe: ''
+      existingLoanBalance: '', existingSavings: '', existingAdashe: '',
+      migrationDate: ''
     });
     setPassportBase64('');
     setLoanFormBase64('');
@@ -281,8 +336,21 @@ const Registration: React.FC<RegistrationProps> = ({ loans, onAddLoan, existingG
   };
 
   return (
-    <div className="flex flex-col xl:flex-row gap-8 pb-20 animate-fade-in">
+    <div className="flex flex-col xl:flex-row gap-8 pb-20 animate-fade-in relative">
       
+      {/* Offline Indicator Overlay */}
+      {!isOnline && (
+         <div className="absolute top-0 right-0 left-0 z-50 flex justify-center -mt-6 pointer-events-none">
+             <div className="bg-amber-100 border border-amber-300 text-amber-800 px-4 py-2 rounded-b-xl shadow-lg flex items-center gap-2 animate-slide-up">
+                 <span className="text-xl">📡</span>
+                 <div>
+                     <p className="text-xs font-black uppercase">Offline Mode Active</p>
+                     <p className="text-[10px] font-bold opacity-80">Registrations will be saved to drafts.</p>
+                 </div>
+             </div>
+         </div>
+      )}
+
       {/* LEFT: Multi-step Form Wizard */}
       <div className="flex-1 bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden flex flex-col">
         
@@ -419,18 +487,48 @@ const Registration: React.FC<RegistrationProps> = ({ loans, onAddLoan, existingG
                             <p className="text-[10px] text-slate-400 font-bold">Fill only for transferring old records (optional)</p>
                         </div>
                      </div>
-                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-slate-50/50 p-4 rounded-xl border border-slate-200 border-dashed">
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50/50 p-4 rounded-xl border border-slate-200 border-dashed">
+                        {/* Row 1: Dates & Type Confirmation */}
                         <div>
-                            <InputLabel label="Existing Loan Bal (₦)" />
-                            <input type="number" className="w-full p-3 border border-slate-200 rounded-xl font-bold text-slate-700 bg-white" placeholder="0.00" value={formData.existingLoanBalance} onChange={e => setFormData({...formData, existingLoanBalance: e.target.value})} />
+                            <InputLabel label="Original Disb. Date" />
+                            <input 
+                                type="date" 
+                                className="w-full p-3 border border-slate-200 rounded-xl font-bold text-slate-700 bg-white" 
+                                value={formData.migrationDate} 
+                                onChange={e => setFormData({...formData, migrationDate: e.target.value})} 
+                            />
                         </div>
                         <div>
-                            <InputLabel label="Opening Savings (₦)" />
-                            <input type="number" className="w-full p-3 border border-slate-200 rounded-xl font-bold text-emerald-600 bg-white" placeholder="0.00" value={formData.existingSavings} onChange={e => setFormData({...formData, existingSavings: e.target.value})} />
+                            <InputLabel label="Loan Duration Status" />
+                            <div className="flex items-center h-[46px]">
+                                {remainingTime ? (
+                                    <div className={`px-4 py-2 rounded-lg text-xs font-black uppercase w-full text-center ${
+                                        remainingTime.status === 'overdue' 
+                                        ? 'bg-rose-100 text-rose-600 border border-rose-200' 
+                                        : 'bg-emerald-100 text-emerald-600 border border-emerald-200'
+                                    }`}>
+                                        {remainingTime.text}
+                                    </div>
+                                ) : (
+                                    <div className="text-slate-400 text-xs italic w-full text-center">Select Date to Calculate</div>
+                                )}
+                            </div>
                         </div>
-                        <div>
-                            <InputLabel label="Opening Adashe (₦)" />
-                            <input type="number" className="w-full p-3 border border-slate-200 rounded-xl font-bold text-amber-600 bg-white" placeholder="0.00" value={formData.existingAdashe} onChange={e => setFormData({...formData, existingAdashe: e.target.value})} />
+
+                        {/* Row 2: Balances */}
+                        <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                                <InputLabel label="Existing Loan Bal (₦)" />
+                                <input type="number" className="w-full p-3 border border-slate-200 rounded-xl font-bold text-slate-700 bg-white" placeholder="0.00" value={formData.existingLoanBalance} onChange={e => setFormData({...formData, existingLoanBalance: e.target.value})} />
+                            </div>
+                            <div>
+                                <InputLabel label="Opening Savings (₦)" />
+                                <input type="number" className="w-full p-3 border border-slate-200 rounded-xl font-bold text-emerald-600 bg-white" placeholder="0.00" value={formData.existingSavings} onChange={e => setFormData({...formData, existingSavings: e.target.value})} />
+                            </div>
+                            <div>
+                                <InputLabel label="Opening Adashe (₦)" />
+                                <input type="number" className="w-full p-3 border border-slate-200 rounded-xl font-bold text-amber-600 bg-white" placeholder="0.00" value={formData.existingAdashe} onChange={e => setFormData({...formData, existingAdashe: e.target.value})} />
+                            </div>
                         </div>
                      </div>
                   </div>
@@ -505,8 +603,15 @@ const Registration: React.FC<RegistrationProps> = ({ loans, onAddLoan, existingG
                    Next Step →
                 </button>
               ) : (
-                <button type="submit" className="px-8 py-3 bg-emerald-600 text-white rounded-xl font-black uppercase text-xs tracking-widest hover:bg-emerald-700 shadow-lg transition-colors">
-                   ✓ Submit Registration
+                <button 
+                    type="submit" 
+                    className={`px-8 py-3 text-white rounded-xl font-black uppercase text-xs tracking-widest shadow-lg transition-colors ${
+                        isOnline 
+                        ? 'bg-emerald-600 hover:bg-emerald-700' 
+                        : 'bg-amber-500 hover:bg-amber-600'
+                    }`}
+                >
+                   {isOnline ? '✓ Submit Registration' : '💾 Save as Draft'}
                 </button>
               )}
             </div>

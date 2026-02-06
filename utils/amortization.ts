@@ -1,5 +1,5 @@
 
-import { Loan, LoanType } from '../types';
+import { Loan, LoanType, LoanStatus } from '../types';
 
 export interface ScheduleItem {
   period: string;
@@ -10,6 +10,14 @@ export interface ScheduleItem {
   borrowerName?: string;
   group?: string;
 }
+
+export const getStatusFromDPD = (dpd: number): LoanStatus => {
+  if (dpd <= 0) return LoanStatus.CURRENT; // 0
+  if (dpd <= 30) return LoanStatus.WATCH; // 1-30
+  if (dpd <= 60) return LoanStatus.SUBSTANDARD; // 31-60
+  if (dpd <= 90) return LoanStatus.DOUBTFUL; // 61-90
+  return LoanStatus.LOSS; // 91+
+};
 
 export const generateAmortizationSchedule = (loan: Loan): ScheduleItem[] => {
   if (!loan.loanDisbursementDate) return [];

@@ -28,6 +28,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, role
     { id: 'ledger', label: 'General Ledger', icon: '📒', roles: [UserRole.MASTER_ADMIN, UserRole.HOB, UserRole.SFO, UserRole.ACCOUNTANT, UserRole.AUDITOR] },
     { id: 'approvals', label: 'Approvals', icon: '✅', roles: [UserRole.MASTER_ADMIN, UserRole.BDM, UserRole.HOB, UserRole.SFO] },
     { id: 'portfolio', label: 'Portfolio', icon: '🏦', roles: [UserRole.MASTER_ADMIN, UserRole.BDM, UserRole.HOB, UserRole.SFO, UserRole.ENCODER, UserRole.FIELD_OFFICER, UserRole.ACCOUNTANT, UserRole.AUDITOR] },
+    { id: 'education', label: 'Education / CSR', icon: '🎓', roles: [UserRole.MASTER_ADMIN, UserRole.BDM, UserRole.HOB, UserRole.SFO, UserRole.FIELD_OFFICER] },
     { id: 'schedules', label: 'Amortization', icon: '🗓️', roles: [UserRole.MASTER_ADMIN, UserRole.BDM, UserRole.HOB, UserRole.SFO, UserRole.FIELD_OFFICER, UserRole.ACCOUNTANT, UserRole.AUDITOR] },
     { id: 'calculator', label: 'Simulator', icon: '🧮', roles: [UserRole.MASTER_ADMIN, UserRole.BDM, UserRole.HOB, UserRole.SFO, UserRole.FIELD_OFFICER] },
     { id: 'registration', label: 'Registration', icon: '➕', roles: [UserRole.MASTER_ADMIN, UserRole.BDM, UserRole.HOB, UserRole.SFO, UserRole.ENCODER, UserRole.FIELD_OFFICER] },
@@ -39,7 +40,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, role
     { id: 'groups', label: 'Groups', icon: '🏘️', roles: [UserRole.MASTER_ADMIN, UserRole.BDM, UserRole.HOB, UserRole.SFO, UserRole.FIELD_OFFICER, UserRole.ACCOUNTANT, UserRole.AUDITOR] },
     { id: 'reports', label: 'Reports', icon: '📈', roles: [UserRole.MASTER_ADMIN, UserRole.BDM, UserRole.HOB, UserRole.SFO, UserRole.ACCOUNTANT, UserRole.AUDITOR] },
     { id: 'audit_trail', label: 'Audit Trail', icon: '📜', roles: [UserRole.MASTER_ADMIN, UserRole.AUDITOR] },
-    { id: 'settings', label: 'Settings', icon: '⚙️', roles: [UserRole.MASTER_ADMIN, UserRole.BDM, UserRole.HOB, UserRole.SFO, UserRole.FIELD_OFFICER, UserRole.ACCOUNTANT, UserRole.AUDITOR, UserRole.ENCODER] }, // Open to all for Password Change
+    { id: 'settings', label: 'Settings', icon: '⚙️', roles: [UserRole.MASTER_ADMIN, UserRole.BDM, UserRole.HOB, UserRole.SFO, UserRole.FIELD_OFFICER, UserRole.ACCOUNTANT, UserRole.AUDITOR, UserRole.ENCODER] }, 
     { id: 'support', label: 'Help & Support', icon: '❓', roles: [UserRole.MASTER_ADMIN, UserRole.BDM, UserRole.HOB, UserRole.SFO, UserRole.FIELD_OFFICER, UserRole.ACCOUNTANT, UserRole.AUDITOR, UserRole.ENCODER] },
   ];
 

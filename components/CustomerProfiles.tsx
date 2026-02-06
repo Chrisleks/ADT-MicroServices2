@@ -119,6 +119,34 @@ const CustomerProfiles: React.FC<CustomerProfilesProps> = ({ loans, onUpdateLoan
     setNewNote('');
   };
 
+  // --- LOYALTY LOGIC ---
+  const getLoyaltyMetrics = (loan: Loan) => {
+    let score = 100;
+    score -= (loan.dpd * 2);
+    score += Math.min(20, (loan.loanCycle - 1) * 5);
+    score = Math.max(0, Math.min(100, score));
+    
+    let tier = 'Bronze';
+    let gradient = 'from-orange-700 to-amber-900';
+    let limitMultiplier = 1.0;
+    
+    if (score >= 90) {
+        tier = 'Platinum';
+        gradient = 'from-slate-700 to-slate-900';
+        limitMultiplier = 2.0;
+    } else if (score >= 75) {
+        tier = 'Gold';
+        gradient = 'from-yellow-500 to-amber-600';
+        limitMultiplier = 1.5;
+    } else if (score >= 60) {
+        tier = 'Silver';
+        gradient = 'from-slate-400 to-slate-500';
+        limitMultiplier = 1.2;
+    }
+    
+    return { score, tier, gradient, limitMultiplier };
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, field: 'passportPhoto' | 'loanFormPhoto') => {
     const file = e.target.files?.[0];
     if (file && editForm) {
@@ -410,54 +438,66 @@ const CustomerProfiles: React.FC<CustomerProfilesProps> = ({ loans, onUpdateLoan
           ) : (
             // View Details
             <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden animate-in fade-in duration-500">
-                <div className="bg-slate-900 p-8 text-white">
-                <div className="flex justify-between items-center">
-                    <div className="flex items-center gap-6">
-                    <div className="w-24 h-24 rounded-2xl bg-slate-800 border-2 border-white/10 overflow-hidden shadow-2xl">
-                        {customer.passportPhoto ? (
-                        <img src={customer.passportPhoto} className="w-full h-full object-cover" alt="Profile" />
-                        ) : (
-                        <div className="w-full h-full flex items-center justify-center text-4xl">👤</div>
-                        )}
-                    </div>
-                    <div>
-                        <h3 className="text-4xl font-black tracking-tighter leading-tight">{customer.borrowerName}</h3>
-                        <div className="flex gap-4 mt-2 items-center">
-                        <span className="text-[10px] bg-blue-600 px-3 py-1 rounded-full font-black uppercase tracking-widest">ID: {customer.id}</span>
-                        <span className="text-[10px] bg-slate-700 px-3 py-1 rounded-full font-black uppercase tracking-widest">{customer.groupName}</span>
+                <div className="bg-slate-900 p-8 text-white relative overflow-hidden">
+                    {/* Background Noise */}
+                    <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
+                    
+                    <div className="relative z-10 flex justify-between items-center">
+                        <div className="flex items-center gap-6">
+                            <div className="w-24 h-24 rounded-2xl bg-slate-800 border-2 border-white/10 overflow-hidden shadow-2xl">
+                                {customer.passportPhoto ? (
+                                <img src={customer.passportPhoto} className="w-full h-full object-cover" alt="Profile" />
+                                ) : (
+                                <div className="w-full h-full flex items-center justify-center text-4xl">👤</div>
+                                )}
+                            </div>
+                            <div>
+                                <h3 className="text-4xl font-black tracking-tighter leading-tight">{customer.borrowerName}</h3>
+                                <div className="flex gap-4 mt-2 items-center">
+                                    <span className="text-[10px] bg-blue-600 px-3 py-1 rounded-full font-black uppercase tracking-widest">ID: {customer.id}</span>
+                                    <span className="text-[10px] bg-slate-700 px-3 py-1 rounded-full font-black uppercase tracking-widest">{customer.groupName}</span>
+                                </div>
+                            </div>
+                        </div>
                         
-                        {/* Status Badge */}
-                        <span className={`text-[10px] px-3 py-1 rounded-full font-black uppercase tracking-widest ${
-                            customer.status === LoanStatus.CURRENT ? 'bg-emerald-500 text-white' :
-                            customer.status === LoanStatus.WATCH ? 'bg-yellow-400 text-yellow-900' :
-                            customer.status === LoanStatus.SUBSTANDARD ? 'bg-orange-500 text-white' :
-                            customer.status === LoanStatus.DOUBTFUL ? 'bg-rose-600 text-white' :
-                            'bg-slate-900 text-white border border-slate-700'
-                        }`}>
-                            {customer.status}
-                        </span>
+                        {/* LOYALTY CARD VISUALIZATION */}
+                        <div className={`w-64 h-36 rounded-xl shadow-2xl relative overflow-hidden p-4 flex flex-col justify-between border border-white/10 bg-gradient-to-br ${getLoyaltyMetrics(customer).gradient}`}>
+                            <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl -mr-10 -mt-10"></div>
+                            
+                            <div className="flex justify-between items-start">
+                                <span className="text-[9px] font-black text-white/70 uppercase tracking-widest">Loyalty Status</span>
+                                <span className="text-2xl">👑</span>
+                            </div>
+                            
+                            <div className="text-center">
+                                <div className="text-xl font-black uppercase tracking-widest text-white shadow-sm">{getLoyaltyMetrics(customer).tier} MEMBER</div>
+                                <div className="text-[9px] font-bold text-white/80 mt-1">Score: {getLoyaltyMetrics(customer).score} / 100</div>
+                            </div>
+
+                            <div className="flex justify-between items-end border-t border-white/20 pt-2">
+                                <div className="text-[8px] text-white/70 font-bold uppercase">Next Limit: {getLoyaltyMetrics(customer).limitMultiplier}x</div>
+                                <div className="text-[8px] text-white/70 font-bold uppercase">TEKAN PRIVILEGE</div>
+                            </div>
                         </div>
                     </div>
-                    </div>
-                    <div className="text-right">
-                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Registration Date</div>
-                        <div className="text-xl font-black">{customer.dateOfRegistration ? new Date(customer.dateOfRegistration).toLocaleDateString() : 'N/A'}</div>
-                        <div className="text-[10px] text-blue-400 font-bold mt-1">OFFICER: {customer.creditOfficer}</div>
-                    </div>
-                </div>
 
-                {/* Edit Actions */}
-                <div className="flex justify-end gap-3 mt-6 border-t border-white/10 pt-4">
-                    <button onClick={handleEdit} className="bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-colors border border-white/10">
-                        <span>✏️</span> Edit Profile
-                    </button>
-                    <button 
-                        onClick={(e) => handleDeleteRequest(e, customer)} 
-                        className="bg-rose-600 hover:bg-rose-500 text-white px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-colors shadow-lg shadow-rose-900/20"
-                    >
-                        <span>🗑️</span> Permanently Delete
-                    </button>
-                </div>
+                    {/* Edit Actions */}
+                    <div className="flex justify-between items-center mt-8 border-t border-white/10 pt-4 relative z-10">
+                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                            Reg Date: <span className="text-white">{customer.dateOfRegistration ? new Date(customer.dateOfRegistration).toLocaleDateString() : 'N/A'}</span> • Officer: <span className="text-blue-400">{customer.creditOfficer}</span>
+                        </div>
+                        <div className="flex gap-3">
+                            <button onClick={handleEdit} className="bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-colors border border-white/10">
+                                <span>✏️</span> Edit Profile
+                            </button>
+                            <button 
+                                onClick={(e) => handleDeleteRequest(e, customer)} 
+                                className="bg-rose-600 hover:bg-rose-500 text-white px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-colors shadow-lg shadow-rose-900/20"
+                            >
+                                <span>🗑️</span> Delete
+                            </button>
+                        </div>
+                    </div>
                 </div>
 
                 <div className="p-8 space-y-12">

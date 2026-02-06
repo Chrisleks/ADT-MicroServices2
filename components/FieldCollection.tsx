@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Loan, TransactionCategory, UserRole, OfflineTransaction } from '../types';
+import { Loan, TransactionCategory, UserRole, OfflineTransaction, LoanType } from '../types';
 import { sanitizeInput } from '../utils/security';
 
 interface FieldCollectionProps {
@@ -31,9 +31,6 @@ const FieldCollection: React.FC<FieldCollectionProps> = ({ loans, onTransaction,
   const officers = Array.from(new Set(loans.map(l => l.creditOfficer))).sort();
   const today = new Date().toISOString().split('T')[0];
 
-  // Note: Auto-print removed for Field Collection per request. 
-  // ADT Sheet, Cashbook, and Summary still auto-print.
-
   // Set default view based on role
   useEffect(() => {
     if (currentUser?.role === UserRole.FIELD_OFFICER) {
@@ -57,42 +54,95 @@ const FieldCollection: React.FC<FieldCollectionProps> = ({ loans, onTransaction,
     'Funds transfer', 'Other Fees'
   ];
 
+  // --- LOAN CALCULATOR LOGIC INTEGRATION ---
+  const getRepaymentMetrics = (loan: Loan) => {
+      // Note: loan.principal already includes interest based on Registration logic
+      const totalPrincipalDue = loan.principal; 
+      
+      let installments = 16;
+      let periodName = 'Week';
+      let periodFactor = 7; // days
+
+      if (loan.loanType.includes('Agric')) {
+          installments = 3; // Agric pays in 3 installments
+          periodName = 'Month';
+          periodFactor = 30; // days
+      }
+
+      const expectedPeriodicPayment = totalPrincipalDue / installments;
+
+      // Calculate Underpayment / Arrears
+      let arrears = 0;
+      let status = 'Pending';
+      let expectedTotalToDate = 0;
+
+      if (loan.loanDisbursementDate) {
+          const start = new Date(loan.loanDisbursementDate);
+          const now = new Date();
+          const diffTime = Math.max(0, now.getTime() - start.getTime());
+          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+          // Calculate how many periods have passed
+          let periodsPassed = Math.floor(diffDays / periodFactor);
+          
+          // Logic Adjustment for Agric (Grace Period handling - simplistic)
+          if (loan.loanType.includes('Agric')) {
+             // Assuming first 4 months are grace, payments start Month 5
+             periodsPassed = Math.max(0, periodsPassed - 4); 
+          }
+
+          // Cap at max installments
+          if (periodsPassed > installments) periodsPassed = installments;
+
+          expectedTotalToDate = expectedPeriodicPayment * periodsPassed;
+
+          const totalPaid = loan.payments
+            .filter(p => p.category === 'Loan Instalment' && p.direction === 'In')
+            .reduce((s, p) => s + p.amount, 0);
+
+          arrears = expectedTotalToDate - totalPaid;
+          
+          if (arrears > 100) status = 'Underpaid'; // Tolerance of 100
+          else status = 'On Track';
+      }
+
+      return {
+          expectedPayment: expectedPeriodicPayment,
+          periodName,
+          arrears,
+          status
+      };
+  };
+
   const handlePost = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedLoanId || !txnAmount) return;
     
     const amount = parseFloat(txnAmount);
-    
-    // SECURITY: Sanitize notes input to prevent XSS
     const sanitizedNotes = sanitizeInput(txnNotes);
     
-    // Logic for withdrawals: Check interception for Savings/Adashe
+    // Allow withdrawals only in Online mode or handle as special request if needed
+    // Current offline logic in App.tsx supports queueing updatedLoan state, so withdrawals are technically possible to draft
     if (txnDir === 'Out' && (txnCategory === 'Savings' || txnCategory === 'Adashe')) {
-        // We do not ask for confirmation via window.confirm to avoid blocking, but we notify user.
         onTransaction(selectedLoanId, txnCategory, txnDir, amount, sanitizedNotes);
-        
-        // Immediate cleanup
         setSelectedLoanId(null);
         setTxnAmount('');
         setTxnNotes('');
 
-        // Notify user of the trigger
         if (isOnline) {
             setTimeout(() => {
               alert("✅ Withdrawal request submitted.\n\nApproval Flow: BDM -> SFO -> HOB");
             }, 100);
         } else {
             setTimeout(() => {
-              alert("⚠️ You are OFFLINE. Withdrawal request queued and will be submitted upon reconnection.");
+              alert("⚠️ Offline Mode: Withdrawal request drafted. Will submit for approval when online.");
             }, 100);
         }
         return;
     }
 
-    // Standard transaction logic
     onTransaction(selectedLoanId, txnCategory, txnDir, amount, sanitizedNotes);
     
-    // UI Feedback for Offline Mode
     if (!isOnline) {
        alert("⚠️ Transaction saved to Offline Drafts. It will automatically post when connection is restored.");
     }
@@ -118,6 +168,11 @@ const FieldCollection: React.FC<FieldCollectionProps> = ({ loans, onTransaction,
     else setSelectedRows(new Set(filteredLoans.map(l => l.id)));
   };
 
+  // Get metrics for the currently selected loan (for the modal)
+  const selectedLoanMetrics = selectedLoanId 
+    ? getRepaymentMetrics(loans.find(l => l.id === selectedLoanId)!) 
+    : null;
+
   return (
     <div className="space-y-6">
       
@@ -142,9 +197,9 @@ const FieldCollection: React.FC<FieldCollectionProps> = ({ loans, onTransaction,
          </div>
       )}
 
-      {/* Sync Status Banner (Only when online but has items) */}
+      {/* Sync Status Banner */}
       {isOnline && offlineQueue.length > 0 && (
-         <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl flex justify-between items-center">
+         <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl flex justify-between items-center animate-fade-in">
              <div className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></div>
                 <span className="text-xs font-bold text-blue-700">Syncing {offlineQueue.length} offline transactions...</span>
@@ -164,7 +219,6 @@ const FieldCollection: React.FC<FieldCollectionProps> = ({ loans, onTransaction,
         </div>
         
         <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
-          {/* View Toggle */}
           <div className="bg-slate-100 p-1 rounded-lg flex mr-2">
              <button 
                 onClick={() => setViewMode('sheet')}
@@ -254,7 +308,6 @@ const FieldCollection: React.FC<FieldCollectionProps> = ({ loans, onTransaction,
                     const pymtSavings = loan.payments.filter(p => p.category === 'Savings' && p.direction === 'In').reduce((s, p) => s + p.amount, 0);
                     const currentLoanBal = loan.principal - pymtLoan;
                     
-                    // Check if any withdrawals are pending
                     const pendingCount = (loan.pendingRequests || []).length;
 
                     return (
@@ -311,8 +364,8 @@ const FieldCollection: React.FC<FieldCollectionProps> = ({ loans, onTransaction,
                const currentLoanBal = loan.principal - pymtLoan;
                const paidToday = loan.payments.some(p => p.date === today && p.category === 'Loan Instalment' && p.direction === 'In');
                
-               // Calculate display due status
-               const dueDate = loan.dueDate ? new Date(loan.dueDate).toLocaleDateString() : 'Weekly';
+               // Calculate Metrics using LoanCalculator Logic
+               const metrics = getRepaymentMetrics(loan);
 
                return (
                    <div key={loan.id} className={`bg-white rounded-2xl border ${paidToday ? 'border-emerald-300 shadow-emerald-50' : 'border-slate-200 shadow-sm'} overflow-hidden relative group`}>
@@ -330,15 +383,29 @@ const FieldCollection: React.FC<FieldCollectionProps> = ({ loans, onTransaction,
                           
                           <h3 className="font-black text-slate-800 text-lg mb-1 truncate">{loan.borrowerName}</h3>
                           
-                          <div className="grid grid-cols-2 gap-2 mt-4">
+                          <div className="grid grid-cols-2 gap-2 mt-4 bg-slate-50 rounded-xl p-2 border border-slate-100">
                              <div>
-                                <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Balance</div>
-                                <div className="text-xl font-black text-blue-600">₦{currentLoanBal.toLocaleString()}</div>
+                                <div className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Expected/{metrics.periodName}</div>
+                                <div className="text-sm font-black text-blue-600">₦{metrics.expectedPayment.toLocaleString(undefined, {maximumFractionDigits: 0})}</div>
                              </div>
                              <div className="text-right">
-                                <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Next Due</div>
-                                <div className="text-sm font-bold text-slate-700 mt-1">{dueDate}</div>
+                                <div className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Balance</div>
+                                <div className="text-sm font-black text-slate-700">₦{currentLoanBal.toLocaleString()}</div>
                              </div>
+                          </div>
+
+                          {/* Underpayment Indicator */}
+                          <div className="mt-2">
+                             {metrics.status === 'Underpaid' ? (
+                                 <div className="bg-rose-100 text-rose-700 px-2 py-1.5 rounded-lg text-[10px] font-bold flex items-center justify-between animate-pulse-slow">
+                                     <span>⚠️ Underpaid by:</span>
+                                     <span className="font-black">₦{metrics.arrears.toLocaleString(undefined, {maximumFractionDigits: 0})}</span>
+                                 </div>
+                             ) : (
+                                 <div className="bg-emerald-50 text-emerald-600 px-2 py-1.5 rounded-lg text-[10px] font-bold flex items-center justify-center">
+                                     <span>✅ Account On Track</span>
+                                 </div>
+                             )}
                           </div>
                           
                           <div className="mt-4 pt-4 border-t border-slate-100 flex gap-2">
@@ -386,6 +453,17 @@ const FieldCollection: React.FC<FieldCollectionProps> = ({ loans, onTransaction,
             </div>
             
             <form onSubmit={handlePost} className="p-6 space-y-4">
+              
+              {/* Payment Hint from Calculator */}
+              {selectedLoanMetrics && txnCategory === 'Loan Instalment' && txnDir === 'In' && (
+                  <div className="bg-blue-50 border border-blue-100 p-3 rounded-xl flex justify-between items-center text-blue-700">
+                      <span className="text-[10px] font-bold uppercase tracking-wider">Recommended {selectedLoanMetrics.periodName}ly Pay:</span>
+                      <span className="text-sm font-black cursor-pointer underline decoration-dotted" onClick={() => setTxnAmount(selectedLoanMetrics.expectedPayment.toFixed(0))} title="Click to autofill">
+                          ₦{selectedLoanMetrics.expectedPayment.toLocaleString(undefined, {maximumFractionDigits: 0})}
+                      </span>
+                  </div>
+              )}
+
               <div className="grid grid-cols-2 gap-3">
                 <div className="col-span-2">
                   <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Transaction Category</label>

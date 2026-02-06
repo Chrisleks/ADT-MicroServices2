@@ -23,12 +23,14 @@ import AuditTrail from './components/AuditTrail';
 import Settings from './components/Settings';
 import Support from './components/Support';
 import AiAnalyst from './components/AiAnalyst';
+import AiTutor from './components/AiTutor';
 import { Logo } from './components/Logo';
 import { INITIAL_LOANS } from './constants';
 import {
   UserRole, SystemUser, Loan, AppNotification, AuditLog, ResetRequest,
-  TransactionCategory, ApprovalStatus, ChatMessage
+  TransactionCategory, ApprovalStatus, ChatMessage, OfflineTransaction
 } from './types';
+import { getStatusFromDPD } from './utils/amortization';
 
 // Mock Initial Data for Authentication Seeding
 const INITIAL_USERS: SystemUser[] = [
@@ -36,6 +38,13 @@ const INITIAL_USERS: SystemUser[] = [
   { username: 'manager', role: UserRole.HOB, isActive: true, password: 'password' },
   { username: 'officer', role: UserRole.FIELD_OFFICER, isActive: true, password: 'password' },
 ];
+
+// Offline Action Types
+type OfflineAction = 
+  | { type: 'ADD_LOAN'; data: Loan }
+  | { type: 'UPDATE_LOAN'; data: Loan } // Used for transactions, edits, etc.
+  | { type: 'DELETE_LOAN'; id: string }
+  | { type: 'LOG_AUDIT'; data: AuditLog };
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<SystemUser | null>(null);
@@ -55,6 +64,7 @@ const App: React.FC = () => {
   // Connection States
   const [dbConnected, setDbConnected] = useState(true); // True if Firebase API Key is present
   const [isNetworkOnline, setIsNetworkOnline] = useState(navigator.onLine); // True if Browser has Internet
+  const [isSyncing, setIsSyncing] = useState(false);
 
   // Data State
   const [loans, setLoans] = useState<Loan[]>([]);
@@ -64,14 +74,18 @@ const App: React.FC = () => {
   const [requests, setRequests] = useState<ResetRequest[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   
-  // --- 1. NETWORK LISTENER ---
+  // Offline Queue State
+  const [offlineQueue, setOfflineQueue] = useState<OfflineAction[]>([]);
+
+  // --- 1. NETWORK LISTENER & SYNC ---
   useEffect(() => {
     const handleOnline = () => {
-        console.log("Network Online");
+        console.log("Network Online - Attempting Sync");
         setIsNetworkOnline(true);
+        processOfflineQueue();
     };
     const handleOffline = () => {
-        console.log("Network Offline");
+        console.log("Network Offline - Switching to Local Mode");
         setIsNetworkOnline(false);
     };
     window.addEventListener('online', handleOnline);
@@ -80,7 +94,62 @@ const App: React.FC = () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
+  }, [offlineQueue]); // Re-bind if queue changes
+
+  // Load Queue from LocalStorage
+  useEffect(() => {
+      const storedQueue = localStorage.getItem('adt_offline_queue');
+      if (storedQueue) {
+          try {
+              setOfflineQueue(JSON.parse(storedQueue));
+          } catch (e) {
+              console.error("Error loading offline queue", e);
+          }
+      }
   }, []);
+
+  // Save Queue to LocalStorage
+  useEffect(() => {
+      localStorage.setItem('adt_offline_queue', JSON.stringify(offlineQueue));
+  }, [offlineQueue]);
+
+  // --- QUEUE PROCESSOR ---
+  const processOfflineQueue = async () => {
+      if (!db || offlineQueue.length === 0 || isSyncing) return;
+
+      setIsSyncing(true);
+      const queueCopy = [...offlineQueue];
+      
+      console.log(`📡 Syncing ${queueCopy.length} offline actions...`);
+
+      try {
+          // Process sequentially to ensure order
+          for (const action of queueCopy) {
+              if (action.type === 'ADD_LOAN') {
+                  await set(ref(db, `loans/${action.data.id}`), action.data);
+              } else if (action.type === 'UPDATE_LOAN') {
+                  // We overwrite the loan node with the latest state captured offline
+                  await update(ref(db, `loans/${action.data.id}`), action.data);
+              } else if (action.type === 'DELETE_LOAN') {
+                  await remove(ref(db, `loans/${action.id}`));
+              } else if (action.type === 'LOG_AUDIT') {
+                  await push(ref(db, 'audit_logs'), action.data);
+              }
+          }
+          
+          // Clear queue only after successful loop
+          setOfflineQueue([]);
+          addAuditLog('System Sync', `Successfully synced ${queueCopy.length} offline records.`, 'INFO');
+          console.log("✅ Sync Complete");
+
+      } catch (error) {
+          console.error("Sync Failed:", error);
+          // We keep the queue to try again later
+          alert("Sync failed. Will retry when connection is stable.");
+      } finally {
+          setIsSyncing(false);
+      }
+  };
 
   // --- 2. DATA INITIALIZATION (Hybrid: Local First, then Firebase) ---
   useEffect(() => {
@@ -91,8 +160,15 @@ const App: React.FC = () => {
         const storedLogs = localStorage.getItem('adt_logs');
         const storedMsgs = localStorage.getItem('adt_messages');
 
-        if (storedLoans) setLoans(JSON.parse(storedLoans));
-        else if (!db) setLoans(INITIAL_LOANS); // Fallback to initial only if no DB
+        if (storedLoans) {
+            const parsedLoans = JSON.parse(storedLoans);
+            // Apply Status Rules Correction
+            setLoans(parsedLoans.map((l: Loan) => ({ ...l, status: getStatusFromDPD(l.dpd || 0) })));
+        }
+        else if (!db) {
+            // Fallback to initial only if no DB, apply logic too
+            setLoans(INITIAL_LOANS.map(l => ({ ...l, status: getStatusFromDPD(l.dpd || 0) }))); 
+        }
 
         if (storedUsers) setUsers(JSON.parse(storedUsers));
         else if (!db) setUsers(INITIAL_USERS);
@@ -113,7 +189,8 @@ const App: React.FC = () => {
             const data = snapshot.val();
             if (data) {
                 const loanArray = Object.values(data) as Loan[];
-                setLoans(loanArray);
+                // Recalculate status on load from DB too, just in case logic changed
+                setLoans(loanArray.map(l => ({ ...l, status: getStatusFromDPD(l.dpd || 0) })));
             }
         }, (error) => {
             console.error("Firebase Read Error", error);
@@ -251,8 +328,9 @@ const App: React.FC = () => {
     };
     
     // Always update local state immediately
-    if (!db) {
+    if (!db || !isNetworkOnline) {
         setAuditLogs(prev => [newLog, ...prev]);
+        if (db) setOfflineQueue(prev => [...prev, { type: 'LOG_AUDIT', data: newLog }]);
     } else {
         push(ref(db, 'audit_logs'), newLog);
     }
@@ -260,27 +338,40 @@ const App: React.FC = () => {
 
   // Data Update Handlers
   const handleAddLoan = (loan: Loan) => {
-    if (!db) {
-        setLoans(prev => [...prev, loan]);
+    // Ensure initial status is consistent with DPD
+    const correctedLoan = { ...loan, status: getStatusFromDPD(loan.dpd || 0) };
+    
+    // Always update Local State first (Optimistic UI)
+    setLoans(prev => [...prev, correctedLoan]);
+
+    if (!db || !isNetworkOnline) {
+        setOfflineQueue(prev => [...prev, { type: 'ADD_LOAN', data: correctedLoan }]);
+        console.log("Offline: Added Loan to Queue");
     } else {
-        // Firebase handles offline queuing automatically
-        set(ref(db, `loans/${loan.id}`), loan);
+        set(ref(db, `loans/${correctedLoan.id}`), correctedLoan);
     }
-    addAuditLog('Create Loan', `Registered new loan for ${loan.borrowerName} (ID: ${loan.id})`, 'INFO');
+    addAuditLog('Create Loan', `Registered new loan for ${correctedLoan.borrowerName} (ID: ${correctedLoan.id})`, 'INFO');
   };
 
   const handleUpdateLoan = (updatedLoan: Loan) => {
-    if (!db) {
-        setLoans(prev => prev.map(l => l.id === updatedLoan.id ? updatedLoan : l));
+    // Recalculate status based on DPD in case DPD changed
+    const correctedLoan = { ...updatedLoan, status: getStatusFromDPD(updatedLoan.dpd || 0) };
+
+    setLoans(prev => prev.map(l => l.id === correctedLoan.id ? correctedLoan : l));
+
+    if (!db || !isNetworkOnline) {
+        setOfflineQueue(prev => [...prev, { type: 'UPDATE_LOAN', data: correctedLoan }]);
     } else {
-        update(ref(db, `loans/${updatedLoan.id}`), updatedLoan);
+        update(ref(db, `loans/${correctedLoan.id}`), correctedLoan);
     }
-    addAuditLog('Update Loan', `Updated profile for ${updatedLoan.borrowerName}`, 'INFO');
+    addAuditLog('Update Loan', `Updated profile for ${correctedLoan.borrowerName}`, 'INFO');
   };
 
   const handleDeleteLoan = (id: string) => {
-    if (!db) {
-        setLoans(prev => prev.filter(l => l.id !== id));
+    setLoans(prev => prev.filter(l => l.id !== id));
+
+    if (!db || !isNetworkOnline) {
+        setOfflineQueue(prev => [...prev, { type: 'DELETE_LOAN', id }]);
     } else {
         remove(ref(db, `loans/${id}`));
     }
@@ -305,8 +396,10 @@ const App: React.FC = () => {
         
         const updatedLoan = { ...loan, pendingRequests: [...(loan.pendingRequests || []), request] };
         
-        if (!db) {
-            setLoans(prev => prev.map(l => l.id === loanId ? updatedLoan : l));
+        setLoans(prev => prev.map(l => l.id === loanId ? updatedLoan : l));
+
+        if (!db || !isNetworkOnline) {
+            setOfflineQueue(prev => [...prev, { type: 'UPDATE_LOAN', data: updatedLoan }]);
         } else {
             update(ref(db, `loans/${loanId}`), updatedLoan);
         }
@@ -336,8 +429,10 @@ const App: React.FC = () => {
       adasheBalance: updatedAdashe
     };
     
-    if (!db) {
-        setLoans(prev => prev.map(l => l.id === loanId ? updatedLoan : l));
+    setLoans(prev => prev.map(l => l.id === loanId ? updatedLoan : l));
+
+    if (!db || !isNetworkOnline) {
+        setOfflineQueue(prev => [...prev, { type: 'UPDATE_LOAN', data: updatedLoan }]);
     } else {
         update(ref(db, `loans/${loanId}`), updatedLoan);
     }
@@ -368,8 +463,10 @@ const App: React.FC = () => {
           adasheBalance: updatedAdashe
       };
       
-      if (!db) {
-          setLoans(prev => prev.map(l => l.id === loanId ? updatedLoan : l));
+      setLoans(prev => prev.map(l => l.id === loanId ? updatedLoan : l));
+
+      if (!db || !isNetworkOnline) {
+          setOfflineQueue(prev => [...prev, { type: 'UPDATE_LOAN', data: updatedLoan }]);
       } else {
           update(ref(db, `loans/${loanId}`), updatedLoan);
       }
@@ -383,22 +480,34 @@ const App: React.FC = () => {
       else if (currentStatus === ApprovalStatus.PENDING_HOB) nextStatus = ApprovalStatus.APPROVED;
 
       const finalUpdates = nextStatus === ApprovalStatus.APPROVED 
-        ? { disbursementStatus: nextStatus, status: 'Current' }
+        ? { disbursementStatus: nextStatus, status: getStatusFromDPD(0) } // Reset to fresh status logic (performing)
         : { disbursementStatus: nextStatus };
 
-      if (!db) {
-          setLoans(prev => prev.map(l => l.id === loanId ? { ...l, ...finalUpdates } as Loan : l));
-      } else {
-          update(ref(db, `loans/${loanId}`), finalUpdates);
+      const loan = loans.find(l => l.id === loanId);
+      if (loan) {
+          const updatedLoan = { ...loan, ...finalUpdates } as Loan;
+          setLoans(prev => prev.map(l => l.id === loanId ? updatedLoan : l));
+
+          if (!db || !isNetworkOnline) {
+              setOfflineQueue(prev => [...prev, { type: 'UPDATE_LOAN', data: updatedLoan }]);
+          } else {
+              update(ref(db, `loans/${loanId}`), finalUpdates);
+          }
       }
       addAuditLog('Approve Loan', `Advanced loan ${loanId} to ${nextStatus}`, 'INFO');
   };
 
   const handleRejectLoan = (loanId: string) => {
-      if (!db) {
-          setLoans(prev => prev.map(l => l.id === loanId ? { ...l, disbursementStatus: ApprovalStatus.REJECTED } as Loan : l));
-      } else {
-          update(ref(db, `loans/${loanId}`), { disbursementStatus: ApprovalStatus.REJECTED });
+      const loan = loans.find(l => l.id === loanId);
+      if (loan) {
+          const updatedLoan = { ...loan, disbursementStatus: ApprovalStatus.REJECTED } as Loan;
+          setLoans(prev => prev.map(l => l.id === loanId ? updatedLoan : l));
+
+          if (!db || !isNetworkOnline) {
+              setOfflineQueue(prev => [...prev, { type: 'UPDATE_LOAN', data: updatedLoan }]);
+          } else {
+              update(ref(db, `loans/${loanId}`), { disbursementStatus: ApprovalStatus.REJECTED });
+          }
       }
       addAuditLog('Reject Loan', `Rejected loan application ${loanId}`, 'WARNING');
   };
@@ -440,8 +549,10 @@ const App: React.FC = () => {
                 pendingRequests: remainingRequests
               };
               
-              if (!db) {
-                  setLoans(prev => prev.map(l => l.id === loanId ? updatedLoan : l));
+              setLoans(prev => prev.map(l => l.id === loanId ? updatedLoan : l));
+
+              if (!db || !isNetworkOnline) {
+                  setOfflineQueue(prev => [...prev, { type: 'UPDATE_LOAN', data: updatedLoan }]);
               } else {
                   update(ref(db, `loans/${loanId}`), updatedLoan);
               }
@@ -452,8 +563,12 @@ const App: React.FC = () => {
 
       // Just update status
       const updatedRequests = (loan.pendingRequests || []).map(r => r.id === reqId ? { ...r, status: nextStatus } : r);
-      if (!db) {
-          setLoans(prev => prev.map(l => l.id === loanId ? { ...l, pendingRequests: updatedRequests } : l));
+      const updatedLoan = { ...loan, pendingRequests: updatedRequests };
+      
+      setLoans(prev => prev.map(l => l.id === loanId ? updatedLoan : l));
+
+      if (!db || !isNetworkOnline) {
+          setOfflineQueue(prev => [...prev, { type: 'UPDATE_LOAN', data: updatedLoan }]);
       } else {
           update(ref(db, `loans/${loanId}`), { pendingRequests: updatedRequests });
       }
@@ -465,40 +580,34 @@ const App: React.FC = () => {
       if (!loan) return;
       
       const updatedRequests = (loan.pendingRequests || []).map(r => r.id === reqId ? { ...r, status: ApprovalStatus.REJECTED } : r);
+      const updatedLoan = { ...loan, pendingRequests: updatedRequests };
       
-      if (!db) {
-          setLoans(prev => prev.map(l => l.id === loanId ? { ...l, pendingRequests: updatedRequests } : l));
+      setLoans(prev => prev.map(l => l.id === loanId ? updatedLoan : l));
+
+      if (!db || !isNetworkOnline) {
+          setOfflineQueue(prev => [...prev, { type: 'UPDATE_LOAN', data: updatedLoan }]);
       } else {
           update(ref(db, `loans/${loanId}`), { pendingRequests: updatedRequests });
       }
       addAuditLog('Reject Withdrawal', `Rejected transaction request ${reqId}`, 'WARNING');
   };
 
-  // User Management
+  // User Management (Admin Only - No Offline Support for security)
   const handleAddUser = (user: SystemUser) => {
-      if (!db) {
-          setUsers(prev => [...prev, user]);
-      } else {
-          set(ref(db, `system_users/${user.username}`), user);
-      }
+      if (!db || !isNetworkOnline) return alert("Admin actions require an active connection.");
+      set(ref(db, `system_users/${user.username}`), user);
       addAuditLog('Create User', `Created user ${user.username}`, 'CRITICAL');
   };
 
   const handleDeleteUser = (username: string) => {
-      if (!db) {
-          setUsers(prev => prev.filter(u => u.username !== username));
-      } else {
-          remove(ref(db, `system_users/${username}`));
-      }
+      if (!db || !isNetworkOnline) return alert("Admin actions require an active connection.");
+      remove(ref(db, `system_users/${username}`));
       addAuditLog('Delete User', `Deleted user ${username}`, 'CRITICAL');
   };
 
   const handleUpdateUserRole = (username: string, role: UserRole) => {
-      if (!db) {
-          setUsers(prev => prev.map(u => u.username === username ? { ...u, role } : u));
-      } else {
-          update(ref(db, `system_users/${username}`), { role });
-      }
+      if (!db || !isNetworkOnline) return alert("Admin actions require an active connection.");
+      update(ref(db, `system_users/${username}`), { role });
       addAuditLog('Update Role', `Changed role for ${username} to ${role}`, 'CRITICAL');
   };
 
@@ -507,11 +616,9 @@ const App: React.FC = () => {
       if (!user) return alert("User not found.");
       if (user.password !== oldPass) return alert("Incorrect current password.");
 
-      if (!db) {
-          setUsers(prev => prev.map(u => u.username === username ? { ...u, password: newPass } : u));
-      } else {
-          update(ref(db, `system_users/${username}`), { password: newPass });
-      }
+      if (!db || !isNetworkOnline) return alert("Password change requires an active connection.");
+      
+      update(ref(db, `system_users/${username}`), { password: newPass });
       addAuditLog('Password Change', `User ${username} changed their own password`, 'INFO');
       alert("Password updated successfully!");
   };
@@ -526,7 +633,11 @@ const App: React.FC = () => {
           timestamp: new Date().toISOString(),
           channel
       };
-      if (!db) {
+      
+      // Chat is strictly online for now to avoid complexity, or local only if desired.
+      // Current implementation queues local if no DB, but let's keep it simple.
+      if (!db || !isNetworkOnline) {
+          // Local display only
           setMessages(prev => [...prev, msg]);
       } else {
           push(ref(db, 'chat_messages'), msg);
@@ -619,7 +730,7 @@ const App: React.FC = () => {
                                 <div className="space-y-4 pt-2">
                                     <button 
                                         type="submit" 
-                                        className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold uppercase text-xs tracking-widest shadow-lg shadow-indigo-900/30 transition-all transform active:scale-[0.98] flex justify-center items-center gap-2 group/btn"
+                                        className="w-full py-4 bg-indigo-600 hover:bg-indigo-50 text-white rounded-xl font-bold uppercase text-xs tracking-widest shadow-lg shadow-indigo-900/30 transition-all transform active:scale-[0.98] flex justify-center items-center gap-2 group/btn"
                                     >
                                         <span>Authenticate</span>
                                         <svg className="w-4 h-4 group-hover/btn:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -673,7 +784,7 @@ const App: React.FC = () => {
                                         <button 
                                             type="submit" 
                                             disabled={!recoveryUser}
-                                            className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl font-bold uppercase text-xs tracking-widest shadow-lg shadow-emerald-900/30 transition-all transform active:scale-[0.98]"
+                                            className="w-full py-4 bg-emerald-600 hover:bg-emerald-50 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl font-bold uppercase text-xs tracking-widest shadow-lg shadow-emerald-900/30 transition-all transform active:scale-[0.98]"
                                         >
                                             Initiate Reset
                                         </button>
@@ -733,8 +844,9 @@ const App: React.FC = () => {
            loans={loans} 
            onTransaction={handleTransaction} 
            currentUser={currentUser}
-           isOnline={dbConnected && isNetworkOnline}
-           onManualSync={() => {}}
+           isOnline={isNetworkOnline}
+           offlineQueue={offlineQueue as OfflineTransaction[]}
+           onManualSync={processOfflineQueue}
          />
        )}
        {activeTab === 'register_sheet' && <FieldRegister loans={loans} />}
@@ -768,6 +880,7 @@ const App: React.FC = () => {
             onSendMessage={handleSendMessage} 
          />
        )}
+       {activeTab === 'education' && <AiTutor />}
        {activeTab === 'ai_analyst' && <AiAnalyst loans={loans} />}
        {activeTab === 'schedules' && <LoanSchedule loans={loans} />}
        {activeTab === 'communication' && <BulkMessage loans={loans} />}

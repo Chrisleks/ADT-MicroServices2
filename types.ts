@@ -13,11 +13,11 @@ export enum UserRole {
 }
 
 export enum LoanStatus {
-  CURRENT = 'Current',
-  WATCH = 'Watch',
+  CURRENT = 'Performing',
+  WATCH = 'Pass and Watch',
   SUBSTANDARD = 'Substandard',
   DOUBTFUL = 'Doubtful',
-  LOSS = 'Loss'
+  LOSS = 'Lost'
 }
 
 export enum LoanType {
